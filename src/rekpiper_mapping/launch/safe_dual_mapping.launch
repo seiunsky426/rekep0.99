@@ -1,0 +1,68 @@
+<?xml version="1.0"?>
+<launch>
+  <!-- Public guarded entry. It owns perception/mapping only: no camera launch,
+       Piper driver, arm service, controller, CAN node, or joint command topic. -->
+  <!-- Accepted fixed-camera validation shows the tabletop extends below the
+       nominal base_link z=0 plane.  Keep this measured diagnostic margin in
+       the guarded production mapping domain; it does not alter camera TF. -->
+  <arg name="workspace_bounds_min" default="[-0.20,-0.60,-0.07]"/>
+  <arg name="workspace_bounds_max" default="[0.80,0.60,0.80]"/>
+  <arg name="esdf_slice_z_m" default="0.10"/>
+  <arg name="mapping_cameras_config"
+       default="$(find rekpiper_mapping)/config/nvblox_cameras_dual.yaml"/>
+  <arg name="render_camera_name" default="rs1"/>
+  <arg name="publish_raw_tsdf_diagnostic" default="false"/>
+  <!-- Shared with the acceptance mapper so the two variants cannot race. -->
+  <arg name="session_lock_file" default="/tmp/rekpiper_safe_dual_mapping.lock"/>
+  <arg name="auto_rebuild_on_startup" default="false"/>
+  <arg name="rs1_extrinsics"
+       default="$(find rekpiper_camera)/config/active_fixed_camera_extrinsics/rs1_extrinsics.yaml"/>
+  <arg name="rs3_extrinsics"
+       default="$(find rekpiper_camera)/config/active_fixed_camera_extrinsics/rs3_extrinsics.yaml"/>
+  <arg name="safe_acceptance_manifest"
+       default="$(find rekpiper_mapping)/config/safe_mapping_acceptance.yaml"/>
+  <arg name="mode" default="shadow"/>
+  <arg name="observation_only" default="false"
+       doc="Shadow diagnostics retain objects; SDF queries remain invalid for planning."/>
+  <arg name="stepwise_capture" default="false"
+       doc="Rebuild and export observation snapshots on demand, then hold the map."/>
+  <arg name="release_bundle" default=""/>
+  <arg name="acceptance_public_key" default=""/>
+  <arg name="minimum_release_counter" default=""/>
+  <arg name="robot_id" default="piper-rekpiper"/>
+  <arg name="vendor_root" default="$(env REKPIPER_VENDOR_ROOT)"/>
+  <node pkg="rekpiper_mapping" type="mapping_launch_guard_node.py"
+        name="$(anon rekpiper_safe_dual_mapping_guard)" output="screen" required="true">
+    <param name="runtime_launch"
+           value="$(find rekpiper_mapping)/launch/_safe_dual_mapping_runtime_internal.launch"/>
+    <param name="domain_name" value="rekpiper_safe_dual_mapping"/>
+    <param name="require_external_master" value="true"/>
+    <param name="lock_file" value="$(arg session_lock_file)"/>
+    <param name="check_piper_processes" value="false"/>
+    <rosparam param="conflicting_nodes">
+      - /curobo_robot_segmenter
+      - /rekpiper/mapping
+      - /safe_mapping_supervisor
+    </rosparam>
+    <rosparam subst_value="true" param="runtime_args">
+      - "workspace_bounds_min:=$(arg workspace_bounds_min)"
+      - "workspace_bounds_max:=$(arg workspace_bounds_max)"
+      - "esdf_slice_z_m:=$(arg esdf_slice_z_m)"
+      - "mapping_cameras_config:=$(arg mapping_cameras_config)"
+      - "render_camera_name:=$(arg render_camera_name)"
+      - "publish_raw_tsdf_diagnostic:=$(arg publish_raw_tsdf_diagnostic)"
+      - "auto_rebuild_on_startup:=$(arg auto_rebuild_on_startup)"
+      - "rs1_extrinsics:=$(arg rs1_extrinsics)"
+      - "rs3_extrinsics:=$(arg rs3_extrinsics)"
+      - "safe_acceptance_manifest:=$(arg safe_acceptance_manifest)"
+      - "mode:=$(arg mode)"
+      - "observation_only:=$(arg observation_only)"
+      - "stepwise_capture:=$(arg stepwise_capture)"
+      - "release_bundle:=$(arg release_bundle)"
+      - "acceptance_public_key:=$(arg acceptance_public_key)"
+      - "minimum_release_counter:=$(arg minimum_release_counter)"
+      - "robot_id:=$(arg robot_id)"
+      - "vendor_root:=$(arg vendor_root)"
+    </rosparam>
+  </node>
+</launch>

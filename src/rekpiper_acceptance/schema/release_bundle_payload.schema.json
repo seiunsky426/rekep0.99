@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rekpiper.local/schema/release-bundle-payload-v2.json",
+  "title": "ReKpiper release bundle payload",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "release_counter",
+    "robot_id",
+    "piper_identity",
+    "camera_serials",
+    "official_rekep_commit",
+    "bindings",
+    "artifacts"
+  ],
+  "properties": {
+    "release_counter": {"type": "integer", "minimum": 0},
+    "robot_id": {"type": "string", "minLength": 1},
+    "piper_identity": {"type": "string", "minLength": 1},
+    "camera_serials": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rs1", "rs3"],
+      "properties": {
+        "rs1": {"type": "string", "minLength": 1},
+        "rs3": {"type": "string", "minLength": 1}
+      }
+    },
+    "official_rekep_commit": {
+      "const": "63c43fdba60354980258beaeb8a7d48e088e1e3e"
+    },
+    "bindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_manifest_sha256", "urdf_sha256",
+        "system_config_sha256", "runtime_fingerprint_sha256"
+      ],
+      "properties": {
+        "source_manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "urdf_sha256": {"$ref": "#/$defs/sha256"},
+        "system_config_sha256": {"$ref": "#/$defs/sha256"},
+        "runtime_fingerprint_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "sha256"],
+        "properties": {
+          "path": {"type": "string", "minLength": 1},
+          "sha256": {"$ref": "#/$defs/sha256"}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

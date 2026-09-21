@@ -1,0 +1,66 @@
+<?xml version="1.0"?>
+<launch>
+  <!-- Online ReKep state estimation: object identity/masks, attachment state,
+       and DINOv2 keypoint tracks. Camera acquisition and ESDF mapping are
+       deliberately owned by their respective packages. -->
+  <arg name="gripper_baseline"
+       default="$(find rekpiper_perception)/config/piper_gripper_baseline.yaml"/>
+  <arg name="model_root" default="$(env REKPIPER_MODEL_ROOT)"/>
+  <arg name="vendor_root" default="$(env REKPIPER_VENDOR_ROOT)"/>
+  <arg name="mode" default="shadow"/>
+  <arg name="release_bundle" default=""/>
+  <arg name="acceptance_public_key" default=""/>
+  <arg name="minimum_release_counter" default=""/>
+  <arg name="robot_id" default="piper-rekpiper"/>
+
+  <node pkg="rekpiper_perception" type="object_registry_node.py"
+        name="object_registry" output="screen" required="true">
+    <rosparam param="camera_names">[rs1]</rosparam>
+    <param name="maximum_active_objects" value="4"/>
+  </node>
+
+  <node pkg="rekpiper_perception" type="multicamera_object_tracker_node.py"
+        name="multicamera_object_tracker" output="screen" required="true">
+    <rosparam param="camera_names">[rs1]</rosparam>
+    <rosparam command="load"
+              file="$(find rekpiper_perception)/config/cutie_runtime.yaml"/>
+    <param name="cutie_source_root"
+           value="$(arg vendor_root)/Cutie"/>
+    <param name="cutie_weights_path"
+           value="$(arg model_root)/cutie-base-mega.pth"/>
+    <param name="dinov2_repo_path"
+           value="$(arg vendor_root)/dinov2"/>
+    <param name="dinov2_weights_path"
+           value="$(arg model_root)/dinov2_vits14_reg4_pretrain.pth"/>
+    <param name="require_cuda" value="true"/>
+    <param name="require_dinov2" value="true"/>
+  </node>
+
+  <node pkg="rekpiper_perception" type="grasp_state_monitor_node.py"
+        name="grasp_state_monitor" output="screen" required="true">
+    <param name="gripper_baseline" value="$(arg gripper_baseline)"/>
+    <param name="mode" value="$(arg mode)"/>
+    <param name="release_bundle" value="$(arg release_bundle)"/>
+    <param name="acceptance_public_key" value="$(arg acceptance_public_key)"/>
+    <param name="minimum_release_counter" value="$(arg minimum_release_counter)"/>
+    <param name="robot_id" value="$(arg robot_id)"/>
+    <param name="minimum_release_stable_updates" value="10"/>
+  </node>
+
+  <node pkg="rekpiper_perception" type="dual_dino_tracker_node.py"
+        name="dual_dino_tracker" output="screen" required="true">
+    <rosparam param="camera_names">[rs1]</rosparam>
+    <param name="rate_hz" value="20.0"/>
+    <param name="use_object_masks" value="true"/>
+    <param name="reference_radius_m" value="0.02"/>
+    <param name="similarity_threshold" value="0.60"/>
+    <param name="top_k" value="100"/>
+    <param name="mad_multiplier" value="2.0"/>
+    <param name="smoothing_window" value="10"/>
+    <param name="maximum_reference_offset_s" value="0.15"/>
+    <param name="dinov2_repo"
+           value="$(arg vendor_root)/dinov2"/>
+    <param name="dinov2_weights"
+           value="$(arg model_root)/dinov2_vits14_reg4_pretrain.pth"/>
+  </node>
+</launch>

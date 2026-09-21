@@ -1,0 +1,11 @@
+std_msgs/Header header
+string instruction
+string session_id
+string program_sha256
+string snapshot_id
+string map_generation_uuid
+uint32 stage_index
+uint32 grasp_attempt
+rekpiper_msgs/GraspCandidate[] candidates
+string status
+bool planning_authorized

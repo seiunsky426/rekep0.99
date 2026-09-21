@@ -1,0 +1,95 @@
+<?xml version="1.0"?>
+<launch>
+  <!--
+    Explicit dual-D435 synchronization modes.
+
+    timestamp:              cameras stream independently (inter-cam mode 0);
+                            the calibration capture node pairs RGB messages by
+                            their ROS header timestamps.
+    hardware_master_slave:  rs1=master (mode 1), rs3=slave (mode 2).  This
+                            requires physical rs1 SYNC OUT -> rs3 SYNC IN and
+                            a common GND.  Do not select this mode without the
+                            physical cable: a slave may emit no depth frames.
+  -->
+  <arg name="sync_mode" default="timestamp" doc="timestamp|hardware_master_slave"/>
+  <arg name="serial_rs1" default="346522071783"/>
+  <arg name="serial_rs3" default="934222070377"/>
+  <arg name="initial_reset" default="false"/>
+  <arg name="width" default="1280"/>
+  <arg name="height" default="720"/>
+  <arg name="fps" default="30"/>
+  <!-- Callers choose whether RGB-D alignment is required.  The hybrid
+       calibration launch explicitly enables both streams. -->
+  <arg name="enable_depth" default="false"/>
+  <arg name="align_depth" default="false"/>
+  <arg name="depth_width" default="848"/>
+  <arg name="depth_height" default="480"/>
+  <arg name="depth_fps" default="30"/>
+
+  <group if="$(eval arg('sync_mode') == 'timestamp')">
+    <include file="$(find rekpiper_camera)/launch/d435_rgbd.launch">
+      <arg name="camera" value="rs1"/>
+      <arg name="serial_no" value="$(arg serial_rs1)"/>
+      <arg name="initial_reset" value="$(arg initial_reset)"/>
+      <arg name="width" value="$(arg width)"/>
+      <arg name="height" value="$(arg height)"/>
+      <arg name="fps" value="$(arg fps)"/>
+      <arg name="enable_depth" value="$(arg enable_depth)"/>
+      <arg name="align_depth" value="$(arg align_depth)"/>
+      <arg name="depth_width" value="$(arg depth_width)"/>
+      <arg name="depth_height" value="$(arg depth_height)"/>
+      <arg name="depth_fps" value="$(arg depth_fps)"/>
+      <arg name="intra_camera_sync" value="false"/>
+      <arg name="inter_cam_sync_mode" value="0"/>
+    </include>
+    <include file="$(find rekpiper_camera)/launch/d435_rgbd.launch">
+      <arg name="camera" value="rs3"/>
+      <arg name="serial_no" value="$(arg serial_rs3)"/>
+      <arg name="initial_reset" value="$(arg initial_reset)"/>
+      <arg name="width" value="$(arg width)"/>
+      <arg name="height" value="$(arg height)"/>
+      <arg name="fps" value="$(arg fps)"/>
+      <arg name="enable_depth" value="$(arg enable_depth)"/>
+      <arg name="align_depth" value="$(arg align_depth)"/>
+      <arg name="depth_width" value="$(arg depth_width)"/>
+      <arg name="depth_height" value="$(arg depth_height)"/>
+      <arg name="depth_fps" value="$(arg depth_fps)"/>
+      <arg name="intra_camera_sync" value="false"/>
+      <arg name="inter_cam_sync_mode" value="0"/>
+    </include>
+  </group>
+
+  <group if="$(eval arg('sync_mode') == 'hardware_master_slave')">
+    <include file="$(find rekpiper_camera)/launch/d435_rgbd.launch">
+      <arg name="camera" value="rs1"/>
+      <arg name="serial_no" value="$(arg serial_rs1)"/>
+      <arg name="initial_reset" value="$(arg initial_reset)"/>
+      <arg name="width" value="$(arg width)"/>
+      <arg name="height" value="$(arg height)"/>
+      <arg name="fps" value="$(arg fps)"/>
+      <arg name="enable_depth" value="$(arg enable_depth)"/>
+      <arg name="align_depth" value="$(arg align_depth)"/>
+      <arg name="depth_width" value="$(arg depth_width)"/>
+      <arg name="depth_height" value="$(arg depth_height)"/>
+      <arg name="depth_fps" value="$(arg depth_fps)"/>
+      <arg name="intra_camera_sync" value="false"/>
+      <arg name="inter_cam_sync_mode" value="1"/>
+    </include>
+    <include file="$(find rekpiper_camera)/launch/d435_rgbd.launch">
+      <arg name="camera" value="rs3"/>
+      <arg name="serial_no" value="$(arg serial_rs3)"/>
+      <arg name="initial_reset" value="$(arg initial_reset)"/>
+      <arg name="width" value="$(arg width)"/>
+      <arg name="height" value="$(arg height)"/>
+      <arg name="fps" value="$(arg fps)"/>
+      <arg name="enable_depth" value="$(arg enable_depth)"/>
+      <arg name="align_depth" value="$(arg align_depth)"/>
+      <arg name="depth_width" value="$(arg depth_width)"/>
+      <arg name="depth_height" value="$(arg depth_height)"/>
+      <arg name="depth_fps" value="$(arg depth_fps)"/>
+      <arg name="intra_camera_sync" value="false"/>
+      <arg name="inter_cam_sync_mode" value="2"/>
+    </include>
+  </group>
+
+</launch>

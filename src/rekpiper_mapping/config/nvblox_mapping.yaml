@@ -1,0 +1,38 @@
+target_frame: base_link
+camera_frame: camera_color_optical_frame
+workspace_bounds_min: [-0.80, -0.80, -0.07]
+workspace_bounds_max: [0.80, 0.80, 1.50]
+
+voxel_size_m: 0.015
+depth_rate_hz: 30.0
+esdf_rate_hz: 20.0
+depth_scale: 0.001
+min_depth_m: 0.10
+max_depth_m: 2.00
+max_map_age_s: 1.0
+unknown_occupied_distance_m: 1.0
+esdf_slice_pixels: 192
+esdf_slice_z_m: 0.10
+esdf_slice_truncation_m: 0.15
+tsdf_render_width: 640
+tsdf_render_height: 480
+tsdf_visualization_rate_hz: 1.0
+local_map_pixels: 256
+local_map_half_extent_m: 0.30
+obstacle_range_rate_hz: 1.0
+
+mask_dilation_px: 3
+mask_max_age_s: 0.15
+mask_sync_slop_s: 0.01
+mask_stamp_tolerance_s: 0.002
+require_robot_mask: true
+require_dynamic_mask: true
+min_retained_fraction: 0.05
+
+tf_timeout_s: 0.10
+sync_slop_s: 0.05
+max_queries: 400000
+depth_topic: /camera/aligned_depth_to_color/image_raw
+camera_info_topic: /camera/color/camera_info
+robot_mask_topic: /rekpiper/mapping/robot_mask
+dynamic_mask_topic: /rekpiper/mapping/dynamic_object_mask

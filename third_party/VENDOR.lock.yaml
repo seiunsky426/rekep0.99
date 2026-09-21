@@ -1,0 +1,44 @@
+schema_version: 1
+approved: false
+python_abi: cp38-cp38-manylinux_2_17_x86_64
+description: >-
+  Repository template only.  Deployment must supply a signed site copy with
+  concrete immutable commits and asset hashes; placeholders never authorize
+  autonomous mode.
+vendors:
+  dinov2:
+    relative_path: dinov2
+    repository: https://github.com/facebookresearch/dinov2.git
+    commit: SITE_REQUIRED
+    required_imports: [dinov2]
+    assets: {dinov2_vits14_reg4_pretrain.pth: SITE_REQUIRED}
+  sam:
+    relative_path: segment-anything
+    repository: https://github.com/facebookresearch/segment-anything.git
+    commit: SITE_REQUIRED
+    required_imports: [segment_anything]
+    assets: {sam_vit_h_4b8939.pth: SITE_REQUIRED}
+  cutie:
+    relative_path: Cutie
+    repository: https://github.com/hkchengrex/Cutie.git
+    commit: SITE_REQUIRED
+    required_imports: [cutie]
+    assets: {cutie-base-mega.pth: SITE_REQUIRED}
+  curobo:
+    relative_path: curobo
+    repository: https://github.com/NVlabs/curobo.git
+    commit: SITE_REQUIRED
+    required_imports: [curobo]
+    assets: {}
+  nvblox:
+    relative_path: nvblox_torch
+    repository: https://github.com/NVlabs/nvblox_torch.git
+    commit: SITE_REQUIRED
+    required_imports: [nvblox_torch]
+    assets: {}
+  anygrasp:
+    relative_path: anygrasp_sdk/grasp_detection
+    repository: VENDOR_LICENSED_DISTRIBUTION
+    commit: SITE_REQUIRED
+    required_imports: [gsnet]
+    assets: {checkpoint_detection.tar: SITE_REQUIRED}

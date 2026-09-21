@@ -1,0 +1,25 @@
+<launch>
+  <arg name="plan" doc="Absolute path to a PREVIEW_ONLY 20-pose YAML"/>
+  <arg name="start_rviz" default="true"/>
+  <arg name="workspace" default="" doc="Optional user-reported workspace YAML for display"/>
+  <arg name="geometry_report" default="" doc="Optional matching workspace audit for candidate board display"/>
+  <!-- Private TF topics isolate the animated model from live calibration. -->
+  <group ns="calibration_preview">
+    <param name="robot_description" textfile="$(find piper_description)/urdf/piper_description.urdf"/>
+    <node pkg="rekpiper_calibration" type="calibration_preview_node.py" name="playback" output="screen" required="true">
+      <param name="plan" value="$(arg plan)"/>
+      <param name="workspace" value="$(arg workspace)"/>
+      <param name="geometry_report" value="$(arg geometry_report)"/>
+    </node>
+    <node pkg="robot_state_publisher" type="robot_state_publisher" name="robot_state_publisher">
+      <remap from="joint_states" to="playback/joint_states"/>
+      <remap from="/tf" to="/calibration_preview/tf"/>
+      <remap from="/tf_static" to="/calibration_preview/tf_static"/>
+    </node>
+    <node if="$(arg start_rviz)" pkg="rviz" type="rviz" name="rviz"
+          args="-d $(find rekpiper_calibration)/config/calibration_preview.rviz">
+      <remap from="/tf" to="/calibration_preview/tf"/>
+      <remap from="/tf_static" to="/calibration_preview/tf_static"/>
+    </node>
+  </group>
+</launch>

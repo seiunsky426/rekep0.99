@@ -1,0 +1,55 @@
+<?xml version="1.0"?>
+<launch>
+  <!-- Source classification: NEW ROS launch adapter. -->
+  <arg name="camera" default="camera"/>
+  <arg name="serial_no" default="" doc="Set the D435 serial when known."/>
+  <arg name="initial_reset" default="true"/>
+  <arg name="respawn" default="false"
+       doc="Retry the upstream nodelet loader if its manager is not ready yet."/>
+  <arg name="width" default="640"/>
+  <arg name="height" default="480"/>
+  <arg name="fps" default="30"/>
+  <arg name="depth_width" default="848"/>
+  <arg name="depth_height" default="480"/>
+  <arg name="depth_fps" default="30"/>
+  <arg name="enable_depth" default="true"/>
+  <arg name="align_depth" default="$(arg enable_depth)"/>
+  <!-- enable_sync only synchronizes streams inside one D435.  It is not
+       inter-camera hardware synchronization. -->
+  <arg name="intra_camera_sync" default="false"/>
+  <!-- librealsense RS3_OPTION_INTER_CAM_SYNC_MODE on the stereo module:
+       0=default/asynchronous, 1=master, 2=slave. -->
+  <arg name="inter_cam_sync_mode" default="0"/>
+  <arg name="enable_pointcloud" default="false"
+       doc="ReKep publishes its own timestamp-checked organized cloud."/>
+
+  <!-- The RealSense factory node lives at
+       /<camera>/realsense2_camera and reads this private option during device
+       setup.  Setting it at /<camera>/stereo_module would be ignored. -->
+  <group ns="$(arg camera)/realsense2_camera">
+    <param name="stereo_module/inter_cam_sync_mode"
+           value="$(arg inter_cam_sync_mode)" type="int"/>
+  </group>
+
+  <include file="$(find realsense2_camera)/launch/rs_camera.launch">
+    <arg name="camera" value="$(arg camera)"/>
+    <arg name="tf_prefix" value="$(arg camera)"/>
+    <arg name="serial_no" value="$(arg serial_no)"/>
+    <arg name="align_depth" value="$(arg align_depth)"/>
+    <arg name="enable_sync" value="$(arg intra_camera_sync)"/>
+    <arg name="enable_pointcloud" value="$(arg enable_pointcloud)"/>
+    <arg name="initial_reset" value="$(arg initial_reset)"/>
+    <arg name="respawn" value="$(arg respawn)"/>
+    <arg name="color_width" value="$(arg width)"/>
+    <arg name="color_height" value="$(arg height)"/>
+    <arg name="depth_width" value="$(arg depth_width)"/>
+    <arg name="depth_height" value="$(arg depth_height)"/>
+    <arg name="color_fps" value="$(arg fps)"/>
+    <arg name="depth_fps" value="$(arg depth_fps)"/>
+    <arg name="enable_color" value="true"/>
+    <arg name="enable_depth" value="$(arg enable_depth)"/>
+    <arg name="enable_infra" value="false"/>
+    <arg name="enable_infra1" value="false"/>
+    <arg name="enable_infra2" value="false"/>
+  </include>
+</launch>

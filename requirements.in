@@ -1,0 +1,13 @@
+# ReKpiper core Python runtime (Ubuntu 20.04 / CPython 3.8 / x86_64).
+# ROS Python modules are installed through rosdep/apt.  DINOv2, SAM, Cutie,
+# cuRobo, nvblox and AnyGrasp are checked by third_party/VENDOR.lock.yaml.
+cryptography==3.3.2
+numba==0.57.1
+numpy==1.24.4
+open3d==0.16.0
+opencv-contrib-python==4.8.1.78
+PyYAML==6.0.1
+requests==2.31.0
+scikit-learn==1.3.2
+scipy==1.10.1
+trimesh==4.4.9

@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<launch>
+  <!-- Start dual_rgbd_runtime.launch first. Output feeds AnyGrasp; source
+       colors additionally expose cross-camera registration errors in RViz. -->
+  <arg name="voxel_size_m" default="0.003"/>
+  <arg name="maximum_stamp_delta_s" default="0.025"/>
+  <arg name="publish_rate_hz" default="5.0"/>
+  <arg name="pair_queue_size" default="16"/>
+  <arg name="maximum_cloud_age_s" default="0.5"/>
+
+  <node pkg="rekpiper_camera" type="dual_workspace_cloud_fusion_node.py"
+        name="dual_workspace_cloud_fusion" output="screen">
+    <param name="target_frame" value="base_link"/>
+    <param name="rs1_input_topic" value="/rekpiper/camera/rs1/points_recognition"/>
+    <param name="rs3_input_topic" value="/rekpiper/camera/rs3/points_recognition"/>
+    <param name="output_topic" value="/rekpiper/camera/fused/points_base"/>
+    <param name="voxel_size_m" value="$(arg voxel_size_m)"/>
+    <param name="maximum_stamp_delta_s" value="$(arg maximum_stamp_delta_s)"/>
+    <param name="publish_rate_hz" value="$(arg publish_rate_hz)"/>
+    <param name="pair_queue_size" value="$(arg pair_queue_size)"/>
+    <param name="maximum_cloud_age_s" value="$(arg maximum_cloud_age_s)"/>
+  </node>
+</launch>

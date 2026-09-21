@@ -1,0 +1,62 @@
+Panels:
+  - Class: rviz/Displays
+    Name: Displays
+  - Class: rviz/Views
+    Name: Views
+Window Geometry:
+  Width: 1400
+  Height: 850
+Visualization Manager:
+  Class: ""
+  Global Options:
+    Fixed Frame: base_link
+    Background Color: 32; 32; 32
+  Displays:
+    - Class: rviz/Grid
+      Name: Base grid
+      Enabled: true
+      Cell Size: 0.1
+    - Class: rviz/PointCloud2
+      Name: RS1 live true RGB (base_link)
+      Enabled: true
+      Topic: /rekpiper/camera/rs1/points_base_rgb
+      Queue Size: 2
+      Style: Points
+      Size (Pixels): 2
+      Color Transformer: RGB8
+      Decay Time: 0
+      Alpha: 1
+    - Class: rviz/PointCloud2
+      Name: RS3 live true RGB (base_link)
+      Enabled: true
+      Topic: /rekpiper/camera/rs3/points_base_rgb
+      Queue Size: 2
+      Style: Points
+      Size (Pixels): 2
+      Color Transformer: RGB8
+      Decay Time: 0
+      Alpha: 1
+    - Class: rviz/RobotModel
+      Name: Isolated Piper visualization (see status for live or playback)
+      Enabled: true
+      Robot Description: /m8_preview/robot_description
+      Visual Enabled: true
+      Collision Enabled: false
+      Alpha: 0.72
+    - Class: rviz/MarkerArray
+      Name: M8 endpoints and candidate paths
+      Enabled: true
+      Marker Topic: /m8_preview/playback/markers
+  Tools:
+    - Class: rviz/MoveCamera
+    - Class: rviz/Select
+  Views:
+    Current:
+      Class: rviz/Orbit
+      Distance: 1.65
+      Pitch: 0.85
+      Yaw: 0.72
+      Focal Point:
+        X: 0.38
+        Y: -0.02
+        Z: 0.16

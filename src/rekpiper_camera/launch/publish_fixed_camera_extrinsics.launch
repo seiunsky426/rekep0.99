@@ -1,0 +1,29 @@
+<?xml version="1.0"?>
+<launch>
+  <!-- Publish only the active, explicitly accepted external-calibration pair. -->
+  <arg name="serial_rs1" default="346522071783"/>
+  <arg name="serial_rs3" default="934222070377"/>
+  <arg name="rs1_extrinsics"
+       default="$(find rekpiper_camera)/config/active_fixed_camera_extrinsics/rs1_extrinsics.yaml"/>
+  <arg name="rs3_extrinsics"
+       default="$(find rekpiper_camera)/config/active_fixed_camera_extrinsics/rs3_extrinsics.yaml"/>
+  <arg name="allow_provisional" default="false"/>
+  <arg name="mode" default="shadow"/>
+  <arg name="release_bundle" default=""/>
+  <arg name="acceptance_public_key" default=""/>
+  <arg name="minimum_release_counter" default=""/>
+  <arg name="robot_id" default="piper-rekpiper"/>
+  <node pkg="rekpiper_camera" type="dual_extrinsics_publisher_node.py"
+        name="dual_extrinsics_publisher" ns="/rekpiper/camera" output="screen" required="true">
+    <param name="serial_rs1" type="str" value="$(arg serial_rs1)"/>
+    <param name="serial_rs3" type="str" value="$(arg serial_rs3)"/>
+    <param name="rs1_extrinsics" value="$(arg rs1_extrinsics)"/>
+    <param name="rs3_extrinsics" value="$(arg rs3_extrinsics)"/>
+    <param name="allow_provisional" value="$(arg allow_provisional)"/>
+    <param name="mode" value="$(arg mode)"/>
+    <param name="release_bundle" value="$(arg release_bundle)"/>
+    <param name="acceptance_public_key" value="$(arg acceptance_public_key)"/>
+    <param name="minimum_release_counter" value="$(arg minimum_release_counter)"/>
+    <param name="robot_id" value="$(arg robot_id)"/>
+  </node>
+</launch>

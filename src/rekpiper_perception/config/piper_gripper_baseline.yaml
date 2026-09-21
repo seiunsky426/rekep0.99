@@ -1,0 +1,10 @@
+# Populate from 20 empty cycles, 10 rigid grasps, and >=5 empty/slip trials.
+calibrated: false
+# Must be changed explicitly to encoder_visual only after the calibration report
+# proves that Piper effort feedback cannot separate contact from empty motion.
+contact_evidence_mode: encoder_effort_vision
+empty_closed_opening_p99_m: 0.0
+empty_effort_p95: 0.0
+minimum_opening_margin_m: 0.002
+minimum_effort_margin: 0.2
+gripper_region_radius_m: 0.18

@@ -1,0 +1,30 @@
+uint8 FREE_TRACKED=1
+uint8 GRASP_REQUESTED=2
+uint8 CLOSING=3
+uint8 ATTACH_CANDIDATE=4
+uint8 ATTACH_VERIFYING=5
+uint8 ATTACHED=6
+uint8 RELEASE_REQUESTED=7
+uint8 OPENING=8
+uint8 RELEASE_VERIFYING=9
+uint8 LOST=10
+uint8 AMBIGUOUS=11
+uint8 FAULT=12
+
+uint8 CAMERA_UNKNOWN=0
+uint8 CAMERA_TRACKED=1
+uint8 CAMERA_TRUSTED_NOT_VISIBLE=2
+uint8 CAMERA_LOST=3
+
+std_msgs/Header header
+string object_uuid
+string display_name
+uint32 rigid_group_id
+uint8 state
+bool excluded_from_static_map
+string parent_frame
+geometry_msgs/PoseWithCovariance pose_base
+string[] camera_names
+uint8[] camera_status
+float32[] camera_confidence
+string status

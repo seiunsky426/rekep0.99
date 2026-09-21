@@ -1,0 +1,199 @@
+<?xml version="1.0"?>
+<launch>
+  <arg name="mode" default="shadow" doc="shadow|autonomous"/>
+  <arg name="serial_rs1" default="346522071783"/>
+  <arg name="serial_rs3" default="934222070377"/>
+  <arg name="can_port" default="can0"/>
+  <arg name="config" default="$(find rekpiper_bringup)/config/system.yaml"/>
+  <arg name="model_root" default="$(env REKPIPER_MODEL_ROOT)"/>
+  <arg name="vendor_root" default="$(env REKPIPER_VENDOR_ROOT)"/>
+  <arg name="data_root" default="$(env REKPIPER_DATA_ROOT)/runs"/>
+  <arg name="official_root" default="$(env REKEP_OFFICIAL_ROOT)"/>
+  <arg name="paper_real_acceptance"
+       default="$(find rekpiper_planning)/config/paper_real_solver_candidate.yaml"/>
+  <arg name="workspace_config"
+       default="$(find rekpiper_camera)/config/recognition_workspace.yaml"/>
+  <arg name="rs1_extrinsics"
+       default="$(find rekpiper_camera)/config/active_fixed_camera_extrinsics/rs1_extrinsics.yaml"/>
+  <arg name="rs3_extrinsics"
+       default="$(find rekpiper_camera)/config/active_fixed_camera_extrinsics/rs3_extrinsics.yaml"/>
+  <arg name="gripper_baseline"
+       default="$(find rekpiper_perception)/config/piper_gripper_baseline.yaml"/>
+  <arg name="safe_acceptance_manifest"
+       default="$(find rekpiper_mapping)/config/safe_mapping_acceptance.yaml"/>
+  <arg name="runtime_performance_software_acceptance"
+       default="$(find rekpiper_execution)/config/runtime_performance_software_unapproved.yaml"/>
+  <arg name="runtime_performance_hardware_acceptance"
+       default="$(find rekpiper_execution)/config/runtime_performance_hardware_unapproved.yaml"/>
+  <arg name="release_bundle" default=""/>
+  <arg name="acceptance_bundle_type" default="release_bundle"
+       doc="release_bundle|hardware_acceptance_bundle"/>
+  <env name="REKPIPER_ACCEPTANCE_BUNDLE_TYPE"
+       value="$(arg acceptance_bundle_type)"/>
+  <arg name="acceptance_public_key" default=""/>
+  <arg name="minimum_release_counter" default=""/>
+  <arg name="robot_id" default="piper-rekpiper"/>
+  <arg name="allow_hardware_commands" default="false"/>
+  <rosparam command="load" file="$(arg config)"/>
+  <param name="/robot_description"
+         textfile="$(find piper_description)/urdf/piper_description.urdf"/>
+  <node pkg="robot_state_publisher" type="robot_state_publisher"
+        name="rekpiper_robot_state_publisher" output="screen">
+    <remap from="joint_states" to="/joint_states"/>
+  </node>
+
+  <node pkg="rekpiper_bringup" type="preflight_node.py"
+        name="preflight" output="screen" required="true">
+    <param name="mode" value="$(arg mode)"/>
+    <param name="model_manifest" value="$(arg model_root)/MANIFEST.sha256"/>
+    <param name="source_root" value="$(env REKPIPER_ROOT)"/>
+    <param name="vendor_root" value="$(arg vendor_root)"/>
+    <param name="paper_real_acceptance" value="$(arg paper_real_acceptance)"/>
+    <param name="runtime_performance_software_acceptance"
+           value="$(arg runtime_performance_software_acceptance)"/>
+    <param name="runtime_performance_hardware_acceptance"
+           value="$(arg runtime_performance_hardware_acceptance)"/>
+    <param name="release_bundle" value="$(arg release_bundle)"/>
+    <param name="acceptance_public_key" value="$(arg acceptance_public_key)"/>
+    <param name="minimum_release_counter" value="$(arg minimum_release_counter)"/>
+    <param name="robot_id" value="$(arg robot_id)"/>
+  </node>
+
+  <group>
+    <include file="$(find rekpiper_camera)/launch/dual_rgbd_runtime.launch">
+      <arg name="serial_rs1" value="$(arg serial_rs1)"/>
+      <arg name="serial_rs3" value="$(arg serial_rs3)"/>
+      <arg name="mode" value="$(arg mode)"/>
+      <arg name="release_bundle" value="$(arg release_bundle)"/>
+      <arg name="acceptance_public_key" value="$(arg acceptance_public_key)"/>
+      <arg name="minimum_release_counter" value="$(arg minimum_release_counter)"/>
+      <arg name="robot_id" value="$(arg robot_id)"/>
+      <arg name="recognition_workspace"
+           value="$(arg workspace_config)"/>
+      <arg name="rs1_extrinsics"
+           value="$(arg rs1_extrinsics)"/>
+      <arg name="rs3_extrinsics"
+           value="$(arg rs3_extrinsics)"/>
+    </include>
+    <include file="$(find rekpiper_perception)/launch/online_tracking.launch">
+      <arg name="model_root" value="$(arg model_root)"/>
+      <arg name="vendor_root" value="$(arg vendor_root)"/>
+      <arg name="mode" value="$(arg mode)"/>
+      <arg name="release_bundle" value="$(arg release_bundle)"/>
+      <arg name="acceptance_public_key" value="$(arg acceptance_public_key)"/>
+      <arg name="minimum_release_counter" value="$(arg minimum_release_counter)"/>
+      <arg name="robot_id" value="$(arg robot_id)"/>
+      <arg name="gripper_baseline"
+           value="$(arg gripper_baseline)"/>
+    </include>
+    <include file="$(find rekpiper_mapping)/launch/safe_dual_mapping.launch">
+      <arg name="workspace_bounds_min" value="[-0.20,-0.60,-0.07]"/>
+      <arg name="workspace_bounds_max" value="[0.80,0.60,0.80]"/>
+      <arg name="auto_rebuild_on_startup" value="false"/>
+      <arg name="rs1_extrinsics"
+           value="$(arg rs1_extrinsics)"/>
+      <arg name="rs3_extrinsics"
+           value="$(arg rs3_extrinsics)"/>
+      <arg name="safe_acceptance_manifest"
+           value="$(arg safe_acceptance_manifest)"/>
+      <arg name="vendor_root" value="$(arg vendor_root)"/>
+      <arg name="mode" value="$(arg mode)"/>
+      <arg name="release_bundle" value="$(arg release_bundle)"/>
+      <arg name="acceptance_public_key" value="$(arg acceptance_public_key)"/>
+      <arg name="minimum_release_counter" value="$(arg minimum_release_counter)"/>
+      <arg name="robot_id" value="$(arg robot_id)"/>
+    </include>
+    <include file="$(find rekpiper_perception)/launch/task_perception.launch">
+      <arg name="workspace_bounds_min" value="[-0.20,-0.60,-0.07]"/>
+      <arg name="workspace_bounds_max" value="[0.80,0.60,0.80]"/>
+      <arg name="official_root" value="$(arg official_root)"/>
+      <arg name="model_root" value="$(arg model_root)"/>
+      <arg name="vendor_root" value="$(arg vendor_root)"/>
+      <arg name="rgb_topic" value="/rs1/color/image_raw"/>
+      <arg name="points_topic" value="/rekpiper/camera/rs1/points_recognition"/>
+      <arg name="wait_for_task_trigger" value="true"/>
+    </include>
+    <node pkg="rekpiper_perception" type="scene_snapshot_node.py"
+          name="scene_snapshot" output="screen" required="true">
+      <rosparam param="camera_names">[rs1]</rosparam>
+    </node>
+    <node pkg="rekpiper_perception" type="snapshot_object_registrar_node.py"
+          name="snapshot_object_registrar" output="screen" required="true"/>
+    <node pkg="rekpiper_mapping" type="sdf_grid_snapshot_node.py"
+          name="sdf_grid_snapshot" output="screen" required="true">
+      <rosparam param="bounds_min">[-0.20,-0.60,-0.07]</rosparam>
+      <rosparam param="bounds_max">[0.80,0.60,0.80]</rosparam>
+      <param name="resolution_m" value="0.015"/>
+      <param name="rate_hz" value="10.0"/>
+    </node>
+    <include file="$(find rekpiper_camera)/launch/dual_workspace_cloud_fusion.launch">
+      <arg name="publish_rate_hz" value="20.0"/>
+    </include>
+  </group>
+
+  <node pkg="rekpiper_planning" type="program_server_node.py"
+        name="program_server" output="screen" required="true">
+    <rosparam command="load" file="$(arg config)"/>
+    <param name="data_root" value="$(arg data_root)"/>
+    <param name="mode" value="$(arg mode)"/>
+    <param name="acceptance_public_key" value="$(arg acceptance_public_key)"/>
+  </node>
+
+  <node pkg="rekpiper_grasp" type="keypoint_anygrasp_selector_node.py"
+        name="keypoint_anygrasp_selector" output="screen"/>
+
+  <node pkg="rekpiper_grasp" type="keypoint_anygrasp_node.py"
+        name="keypoint_anygrasp" output="screen" required="true">
+    <param name="points_topic" value="/rekpiper/camera/rs1/points_recognition"/>
+    <param name="source_camera" value="rs1"/>
+    <param name="inference_frame" value="rs1_color_optical_frame"/>
+    <param name="maximum_horizontal_angle_deg" value="10.0"/>
+    <param name="anygrasp_sdk_root"
+           value="$(arg vendor_root)/anygrasp_sdk/grasp_detection"/>
+    <param name="anygrasp_checkpoint"
+           value="$(arg vendor_root)/anygrasp_sdk/grasp_detection/checkpoint_detection.tar"/>
+    <param name="anygrasp_license_dir"
+           value="$(arg vendor_root)/anygrasp_sdk/grasp_detection/license"/>
+  </node>
+
+  <node pkg="rekpiper_execution" type="closed_loop_node.py"
+        name="closed_loop" output="screen" required="true">
+    <param name="mode" value="$(arg mode)"/>
+    <param name="allow_hardware_commands" value="$(arg allow_hardware_commands)"/>
+    <param name="solver_profile" value="paper_real"/>
+    <param name="paper_real_acceptance" value="$(arg paper_real_acceptance)"/>
+    <param name="workspace_config" value="$(arg workspace_config)"/>
+    <param name="runtime_performance_software_acceptance"
+           value="$(arg runtime_performance_software_acceptance)"/>
+    <param name="runtime_performance_hardware_acceptance"
+           value="$(arg runtime_performance_hardware_acceptance)"/>
+    <param name="release_bundle" value="$(arg release_bundle)"/>
+    <param name="acceptance_public_key" value="$(arg acceptance_public_key)"/>
+    <param name="minimum_release_counter" value="$(arg minimum_release_counter)"/>
+    <param name="robot_id" value="$(arg robot_id)"/>
+    <rosparam command="load" file="$(arg config)"/>
+    <param name="planning_rate_hz" value="10.0"/>
+    <param name="planning_deadline_s" value="0.20"/>
+    <param name="map_max_age_s" value="0.15"/>
+    <param name="tracking_max_age_s" value="0.15"/>
+  </node>
+
+  <!-- The supervisor does not import piper_sdk or open CAN. It launches the
+       internal hardware graph only after the latched preflight result passes. -->
+  <group if="$(eval arg('mode') == 'autonomous' and arg('allow_hardware_commands') == 'true')">
+    <node pkg="rekpiper_bringup" type="hardware_supervisor_node.py"
+          name="hardware_supervisor" output="screen" required="true">
+      <param name="runtime_launch"
+             value="$(find rekpiper_bringup)/launch/_hardware_runtime_internal.launch"/>
+      <param name="hardware_acceptance_runtime_launch"
+             value="$(find rekpiper_bringup)/launch/_hardware_hold_runtime_internal.launch"/>
+      <param name="can_port" value="$(arg can_port)"/>
+      <param name="allow_hardware_commands" value="$(arg allow_hardware_commands)"/>
+      <param name="gripper_baseline" value="$(arg gripper_baseline)"/>
+      <param name="release_bundle" value="$(arg release_bundle)"/>
+      <param name="acceptance_public_key" value="$(arg acceptance_public_key)"/>
+      <param name="minimum_release_counter" value="$(arg minimum_release_counter)"/>
+      <param name="robot_id" value="$(arg robot_id)"/>
+    </node>
+  </group>
+</launch>

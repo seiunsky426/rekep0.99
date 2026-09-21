@@ -1,0 +1,13 @@
+# This file is an auditable release gate, not a place to relax thresholds.
+# Set a field true only after the corresponding dated report is stored locally.
+e3_robot_mask_accepted: false
+e4_multicamera_tracking_accepted: false
+grasp_release_slip_accepted: false
+tsdf_clear_and_residuals_accepted: false
+dual_camera_independent_3d_accepted: false
+reports:
+  e3_robot_mask_accepted: ""
+  e4_multicamera_tracking_accepted: ""
+  grasp_release_slip_accepted: ""
+  tsdf_clear_and_residuals_accepted: ""
+  dual_camera_independent_3d_accepted: ""

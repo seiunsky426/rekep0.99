@@ -1,0 +1,47 @@
+<?xml version="1.0"?>
+<launch>
+  <!-- Dual fixed-camera ArUco18 capture only.  Piper/CAN remains separate. -->
+  <arg name="config" default="$(find rekpiper_calibration)/config/dual_aruco18_handeye.yaml"/>
+  <arg name="sync_mode" default="timestamp" doc="timestamp|hardware_master_slave"/>
+  <arg name="serial_rs1" default="346522071783"/>
+  <arg name="serial_rs3" default="934222070377"/>
+  <arg name="width" default="640"/>
+  <arg name="height" default="360"/>
+  <arg name="fps" default="30"/>
+  <arg name="dictionary" default="DICT_4X4_50"/>
+  <arg name="marker_id" default="18"/>
+  <arg name="marker_side_m" default="0.100"
+       doc="Measured outer side of the black ArUco square, not its carrier."/>
+  <arg name="start_realsense" default="true"/>
+  <arg name="require_joint_states_single" default="true"
+       doc="Require timestamped Piper feedback in every stopped-pose sample."/>
+  <arg name="resume_dataset" default=""
+       doc="Existing incomplete dataset.yaml to resume after a display/capture restart."/>
+
+  <group if="$(arg start_realsense)">
+    <include file="$(find rekpiper_camera)/launch/dual_d435_sync.launch">
+      <arg name="sync_mode" value="$(arg sync_mode)"/>
+      <arg name="serial_rs1" value="$(arg serial_rs1)"/>
+      <arg name="serial_rs3" value="$(arg serial_rs3)"/>
+      <arg name="width" value="$(arg width)"/>
+      <arg name="height" value="$(arg height)"/>
+      <arg name="fps" value="$(arg fps)"/>
+      <arg name="enable_depth" value="true"/>
+      <arg name="align_depth" value="true"/>
+    </include>
+  </group>
+
+  <node pkg="rekpiper_calibration" type="dual_aruco18_capture_node.py"
+        name="dual_aruco18_capture" output="screen" required="true">
+    <rosparam param="config" command="load" file="$(arg config)"/>
+    <param name="config/marker/dictionary" value="$(arg dictionary)" type="str"/>
+    <param name="config/marker/id" value="$(arg marker_id)" type="int"/>
+    <param name="config/marker/marker_side_m" value="$(arg marker_side_m)" type="double"/>
+    <param name="config/cameras/rs1/serial" value="$(arg serial_rs1)" type="str"/>
+    <param name="config/cameras/rs3/serial" value="$(arg serial_rs3)" type="str"/>
+    <param name="require_joint_states_single"
+           value="$(arg require_joint_states_single)" type="bool"/>
+    <param name="resume_dataset" value="$(arg resume_dataset)" type="str"/>
+  </node>
+
+</launch>

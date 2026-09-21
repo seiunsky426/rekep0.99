@@ -1,0 +1,92 @@
+<?xml version="1.0"?>
+<launch>
+  <!-- One-terminal camera bring-up.  roslaunch starts a ROS master itself when
+       none exists, so invoke this entry without the wait flag on a cold start.
+       Piper/CAN control is deliberately not included. -->
+  <arg name="serial_rs1" default="346522071783"/>
+  <arg name="serial_rs3" default="934222070377"/>
+  <arg name="initial_reset" default="false"/>
+  <arg name="camera_respawn" default="false"/>
+  <arg name="mode" default="shadow"/>
+  <arg name="release_bundle" default=""/>
+  <arg name="acceptance_public_key" default=""/>
+  <arg name="minimum_release_counter" default=""/>
+  <arg name="robot_id" default="piper-rekpiper"/>
+  <arg name="width" default="640"/>
+  <arg name="height" default="360"/>
+  <arg name="fps" default="30"/>
+  <!-- The two D435 sync pins are wired: RS1 drives SYNC OUT and RS3 receives
+       SYNC IN. Use timestamp only when intentionally running without that
+       cable; an unconnected slave can stop producing depth frames. -->
+  <arg name="sync_mode" default="hardware_master_slave"
+       doc="timestamp|hardware_master_slave"/>
+  <arg name="rs1_extrinsics"
+       default="$(find rekpiper_camera)/config/active_fixed_camera_extrinsics/rs1_extrinsics.yaml"/>
+  <arg name="rs3_extrinsics"
+       default="$(find rekpiper_camera)/config/active_fixed_camera_extrinsics/rs3_extrinsics.yaml"/>
+
+  <group if="$(eval arg('sync_mode') == 'timestamp')">
+    <include file="$(find rekpiper_camera)/launch/d435_rgbd.launch">
+      <arg name="camera" value="rs1"/>
+      <arg name="serial_no" value="$(arg serial_rs1)"/>
+      <arg name="initial_reset" value="$(arg initial_reset)"/>
+      <arg name="respawn" value="$(arg camera_respawn)"/>
+      <arg name="width" value="$(arg width)"/>
+      <arg name="height" value="$(arg height)"/>
+      <arg name="fps" value="$(arg fps)"/>
+      <arg name="intra_camera_sync" value="false"/>
+      <arg name="inter_cam_sync_mode" value="0"/>
+    </include>
+
+    <include file="$(find rekpiper_camera)/launch/d435_rgbd.launch">
+      <arg name="camera" value="rs3"/>
+      <arg name="serial_no" value="$(arg serial_rs3)"/>
+      <arg name="initial_reset" value="$(arg initial_reset)"/>
+      <arg name="respawn" value="$(arg camera_respawn)"/>
+      <arg name="width" value="$(arg width)"/>
+      <arg name="height" value="$(arg height)"/>
+      <arg name="fps" value="$(arg fps)"/>
+      <arg name="intra_camera_sync" value="false"/>
+      <arg name="inter_cam_sync_mode" value="0"/>
+    </include>
+  </group>
+
+  <group if="$(eval arg('sync_mode') == 'hardware_master_slave')">
+    <include file="$(find rekpiper_camera)/launch/d435_rgbd.launch">
+      <arg name="camera" value="rs1"/>
+      <arg name="serial_no" value="$(arg serial_rs1)"/>
+      <arg name="initial_reset" value="$(arg initial_reset)"/>
+      <arg name="respawn" value="$(arg camera_respawn)"/>
+      <arg name="width" value="$(arg width)"/>
+      <arg name="height" value="$(arg height)"/>
+      <arg name="fps" value="$(arg fps)"/>
+      <arg name="intra_camera_sync" value="false"/>
+      <arg name="inter_cam_sync_mode" value="1"/>
+    </include>
+
+    <include file="$(find rekpiper_camera)/launch/d435_rgbd.launch">
+      <arg name="camera" value="rs3"/>
+      <arg name="serial_no" value="$(arg serial_rs3)"/>
+      <arg name="initial_reset" value="$(arg initial_reset)"/>
+      <arg name="respawn" value="$(arg camera_respawn)"/>
+      <arg name="width" value="$(arg width)"/>
+      <arg name="height" value="$(arg height)"/>
+      <arg name="fps" value="$(arg fps)"/>
+      <arg name="intra_camera_sync" value="false"/>
+      <arg name="inter_cam_sync_mode" value="2"/>
+    </include>
+  </group>
+
+  <!-- The publisher checks each live driver serial before emitting static TF. -->
+  <include file="$(find rekpiper_camera)/launch/publish_fixed_camera_extrinsics.launch">
+    <arg name="serial_rs1" value="$(arg serial_rs1)"/>
+    <arg name="serial_rs3" value="$(arg serial_rs3)"/>
+    <arg name="mode" value="$(arg mode)"/>
+    <arg name="release_bundle" value="$(arg release_bundle)"/>
+    <arg name="acceptance_public_key" value="$(arg acceptance_public_key)"/>
+    <arg name="minimum_release_counter" value="$(arg minimum_release_counter)"/>
+    <arg name="robot_id" value="$(arg robot_id)"/>
+    <arg name="rs1_extrinsics" value="$(arg rs1_extrinsics)"/>
+    <arg name="rs3_extrinsics" value="$(arg rs3_extrinsics)"/>
+  </include>
+</launch>

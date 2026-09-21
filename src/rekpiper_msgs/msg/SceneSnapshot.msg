@@ -1,0 +1,13 @@
+std_msgs/Header header
+string snapshot_id
+uint64 snapshot_stamp_ns
+rekpiper_msgs/Keypoint3DArray keypoints
+rekpiper_msgs/InstanceGeometryArray instances
+string[] camera_names
+uint64[] camera_stamp_ns
+string annotated_image_topic
+string[] instance_mask_topics
+bool time_consistent
+bool immutable_layout
+bool valid
+string status

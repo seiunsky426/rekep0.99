@@ -1,0 +1,12 @@
+std_msgs/Header header
+string map_generation_uuid
+geometry_msgs/Point bounds_min
+geometry_msgs/Point bounds_max
+float32 resolution_m
+uint32 size_x
+uint32 size_y
+uint32 size_z
+float32[] distances_m
+uint8[] observed
+bool valid
+string status

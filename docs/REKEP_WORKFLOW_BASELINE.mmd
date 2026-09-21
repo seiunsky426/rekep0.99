@@ -1,0 +1,180 @@
+flowchart TB
+  TASK["用户任务指令<br/>例如：把蓝色方块放在黄色圆盘上"]
+
+  subgraph M0["M0 运行环境与版本基线｜软件及离线验收通过 5/5"]
+    ENV["Python / ROS / CUDA / 模型 / SDK<br/>源码与权重校验，Catkin 构建"]
+  end
+
+  subgraph SITE["后续现场证据与分级授权｜待验收"]
+    CONFIG["运行配置与现场证据<br/>标定、工作区、夹爪、地图、求解器、性能"]
+    GATE["预检与分级授权<br/>shadow → hardware_hold → 正式 release"]
+    ENV --> GATE
+    CONFIG --> GATE
+  end
+
+  subgraph M1["M1 机器人状态与几何｜待验收"]
+    FEEDBACK["Piper 反馈 / 独立回放源<br/>JointState：6 关节、夹爪开度与 effort"]
+    FK["关节适配 + URDF + FK / TF<br/>base_link → link6 / gripper_base / rekep_tcp"]
+    BODY["Piper 几何与 IK<br/>关节限位、各 link 碰撞采样点"]
+    FEEDBACK -->|"/joint_states_single"| FK
+    FK -->|"关节与连杆位姿"| BODY
+  end
+
+  subgraph M2["M2 双相机与标定｜待验收"]
+    CAMERA["rs1 + rs3 独立 RGB-D 数据<br/>rs3 序列号 934222070377<br/>RGB、对齐深度、CameraInfo、采集时间戳"]
+    CALIB["内参、深度尺度、两套眼在手外标定<br/>求解、独立验证、正式相机 TF"]
+    CAMERA --> CALIB
+    FK -->|"标定采样时的 base_T_link6"| CALIB
+  end
+
+  subgraph M3["M3 三维投影与工作区｜待验收"]
+    PROJECT["逐像素反投影 + 相机到 base_link 变换<br/>有组织点图 H × W × 3"]
+    ROI["工作区过滤<br/>保留像素布局，无效点为 NaN"]
+    FUSION["双视角时间配对与点云融合<br/>场景点集 P × 3"]
+    CAMERA -->|"深度 + K + 同步 RGB"| PROJECT
+    CALIB -->|"采集时刻的相机 TF"| PROJECT
+    PROJECT --> ROI
+    ROI --> FUSION
+  end
+
+  subgraph M4["M4 初始感知与场景快照｜待验收"]
+    SAM["rs1：SAM ViT-H<br/>实例分割、重叠处理、有效深度筛选"]
+    DINO["DINOv2 reg4 + PCA + K-means + MeanShift<br/>候选关键点、像素位置、物体组"]
+    SNAP["冻结 SceneSnapshot<br/>K0…K(N-1)、实例几何、snapshot_id"]
+    ANNOTATED["编号 RGB 图片 + 实例标签图<br/>与快照时间对应"]
+    TASK -->|"task_request：触发候选生成"| SAM
+    CAMERA -->|"rs1 RGB"| SAM
+    ROI -->|"rs1 点图与有效像素"| SAM
+    SAM -->|"实例几何掩码"| DINO
+    CAMERA -->|"rs1 RGB 特征输入"| DINO
+    ROI -->|"rs1 三维点图"| DINO
+    DINO -->|"N × 3 点 + ID + rigid_group_id"| SNAP
+    DINO --> ANNOTATED
+    SAM -->|"视觉掩码、实例边界"| ANNOTATED
+  end
+
+  subgraph M5["M5 在线跟踪与物体状态｜待验收"]
+    REG["对象注册与状态合并<br/>rigid_group_id ↔ object_uuid"]
+    CUTIE["双相机 Cutie 掩码跟踪<br/>跨视角身份检查 + 深度反投影"]
+    TRACK["双视角 DINOv2 关键点匹配<br/>附着物：夹爪局部点经 TF 传播"]
+    LIVE["当前状态<br/>三维关键点、可见性、物体状态、附着点云"]
+    SNAP -->|"实例分组"| REG
+    ANNOTATED -->|"SAM 标签图与种子 mask"| REG
+    REG -->|"ObjectSeed + UUID"| CUTIE
+    CAMERA -->|"连续 RGB-D + K"| CUTIE
+    CALIB -->|"相机 TF"| CUTIE
+    CUTIE -->|"tracker_updates"| REG
+    SNAP -->|"固定编号与参考位置"| TRACK
+    CAMERA -->|"连续双视角 RGB"| TRACK
+    ROI -->|"双视角有组织三维点图"| TRACK
+    REG -->|"物体归属与 ATTACHED 状态"| TRACK
+    FK -->|"base_T_gripper"| TRACK
+    TRACK -->|"/rekpiper/tracking/keypoints"| LIVE
+    REG -->|"/rekpiper/objects/registry"| LIVE
+    CUTIE -->|"当前物体点云"| LIVE
+  end
+
+  subgraph M6["M6 安全地图与距离场｜待验收"]
+    ROBOTMASK["cuRobo 机器人分割<br/>每台相机的 robot_mask"]
+    DEPTH["深度过滤<br/>无效 / 越界 / 机器人 / 已附着物排除"]
+    MAP["nvblox：融合深度 → TSDF → ESDF<br/>重建状态机与 map_generation_uuid"]
+    SDF["QuerySDF → SDFGrid<br/>三维距离数组、observed、边界、尺寸、有效性"]
+    BODY --> ROBOTMASK
+    CAMERA -->|"深度 + K"| ROBOTMASK
+    CALIB -->|"相机 TF"| ROBOTMASK
+    CAMERA -->|"双相机对齐深度 + K"| DEPTH
+    CALIB -->|"相机 TF"| DEPTH
+    ROBOTMASK --> DEPTH
+    CUTIE -->|"按对象状态生成的 dynamic_mask"| DEPTH
+    DEPTH -->|"过滤后的米制深度 + K + 相机位姿"| MAP
+    REG -->|"初始注册完成 / 排除对象集合变化"| MAP
+    MAP -->|"READY 地图的三维距离查询"| SDF
+  end
+
+  subgraph M7["M7 任务约束程序｜待验收"]
+    VLM["Qwen VL 请求<br/>编号图片 + 指令 + 官方提示词与本地约束"]
+    PROGRAM["Python 程序解析、数值检查、人工审查<br/>metadata + 每阶段 subgoal/path 函数"]
+    APPROVED["ReKepProgram<br/>目录、阶段数、抓放 K、快照绑定、哈希与批准状态"]
+    TASK -->|"program/generate：提交同一任务指令"| VLM
+    ANNOTATED -->|"编号图片"| VLM
+    VLM -->|"Python 源码文本"| PROGRAM
+    SNAP -->|"本地校验与保存所用的三维点、编号"| PROGRAM
+    PROGRAM -->|"program/approve"| APPROVED
+  end
+
+  subgraph M8["M8 状态组装与两级规划｜待验收"]
+    STATE["本周期规划输入<br/>阶段、EE pose、关节、K、movable_mask、SDF、碰撞点"]
+    SUB["SubgoalSolver<br/>求当前阶段的末端目标 pose7"]
+    PATH["PathSolver<br/>求当前末端到执行目标的 pose7 路径"]
+    AUDIT["样条稠密化 → Piper 逐点 IK<br/>约束复算、关节跳变、全臂及附着物碰撞检查"]
+    HORIZON["ReKepHorizon<br/>语义目标、执行目标、预测路径、短关节前缀、绑定与状态"]
+    LIVE --> STATE
+    FK -->|"当前 EE pose7 与关节"| STATE
+    BODY -->|"末端碰撞点；全臂点供独立审计"| STATE
+    SDF --> STATE
+    APPROVED -->|"当前阶段函数与任务绑定"| STATE
+    STATE --> SUB
+    SUB -->|"语义目标；抓取时增加局部后退得到执行目标"| PATH
+    STATE -->|"当前状态、路径约束与 SDF"| PATH
+    PATH -->|"稀疏笛卡尔控制点"| AUDIT
+    BODY --> AUDIT
+    SDF --> AUDIT
+    AUDIT -->|"笛卡尔路径、关节路径与检查结果"| HORIZON
+  end
+
+  subgraph M9["M9 短轨迹执行｜待验收"]
+    MODE{"执行分支"}
+    SHADOW["shadow：规划预览<br/>可接无 Piper 驱动的软件性能接收器"]
+    BRIDGE["FollowJointTrajectory 轨迹桥<br/>复核授权、地图、反馈和轨迹限制"]
+    DRIVER["/joint_ctrl_single → Piper SDK / CAN<br/>执行六关节目标；返回真实反馈"]
+    HORIZON --> MODE
+    GATE -->|"启动 / 运行授权条件"| MODE
+    MODE -->|"shadow"| SHADOW
+    MODE -->|"autonomous 且批准、armed"| BRIDGE
+    BRIDGE -->|"六关节位置序列"| DRIVER
+    DRIVER --> FEEDBACK
+    DRIVER -.->|"运动后的新 RGB-D 观测"| CAMERA
+    MAP -->|"safe_status 与地图代际"| BRIDGE
+  end
+
+  subgraph M10["M10 抓取与释放事件｜待验收"]
+    GRASP["抓取目标已稳定到达 → AnyGrasp<br/>目标区域裁剪、候选姿态 / 开度、过滤与选择"]
+    EVENT["抓取：局部接近轨迹 + CLOSE<br/>释放：OPEN + 局部撤离轨迹"]
+    GRIP["CommandGripper → 夹爪驱动<br/>实际开度、effort、执行结果"]
+    VERIFY["接触及相对运动证据<br/>确认 ATTACHED / FREE_TRACKED，或报告失败"]
+    HORIZON -->|"抓取阶段 stage_event_pending"| GRASP
+    FUSION -->|"融合场景点云"| GRASP
+    LIVE -->|"当前抓取 K、物体身份"| GRASP
+    SNAP -->|"实例边界"| GRASP
+    BODY -->|"IK 与机器人几何"| GRASP
+    SDF -->|"候选净空检查"| GRASP
+    GRASP -->|"selected GraspCandidate"| EVENT
+    EVENT -->|"经审计的局部关节轨迹"| BRIDGE
+    EVENT --> GRIP
+    GATE -->|"真实抓放授权条件"| EVENT
+    GRIP --> VERIFY
+    FEEDBACK --> VERIFY
+    FK --> VERIFY
+    CUTIE -->|"物体点云及运动"| VERIFY
+    VERIFY -->|"生命周期与附着碰撞点云"| REG
+    VERIFY -->|"附着点云"| LIVE
+    VERIFY -->|"抓住 / 释放后清图重建"| MAP
+  end
+
+  subgraph M11["M11 阶段管理与完整闭环｜待验收"]
+    CHECK{"当前观测与阶段完成检查"}
+    NEXT["保持当前阶段 / 前进 / 回退<br/>重用约束，更新规划输入与求解历史"]
+    PAUSE["暂停 / 停止 / 记录原因<br/>恢复前重新检查输入与授权"]
+    DONE["所有阶段完成 + 物理任务结果核验<br/>保存数据、日志和验收报告"]
+    LIVE --> CHECK
+    FK -->|"实测末端位姿与当前关节"| CHECK
+    HORIZON --> CHECK
+    VERIFY -->|"真实抓放结果"| CHECK
+    CHECK -->|"释放阶段目标已稳定到达"| EVENT
+    CHECK -->|"未到达 / 下一阶段 / 约束失效需回退"| NEXT
+    NEXT --> STATE
+    CHECK -->|"丢失、过期、地图无效或执行失败"| PAUSE
+    PAUSE -->|"问题排除并获准 resume"| STATE
+    CHECK -->|"末阶段及必要抓放验证完成"| DONE
+    CHECK -.->|"新任务或重建关键点布局时，另行生成并审查程序"| VLM
+  end

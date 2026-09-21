@@ -1,0 +1,10 @@
+std_msgs/Header header
+geometry_msgs/Point[] points
+float32[] radii_m
+---
+std_msgs/Header header
+float32[] distances_m
+bool[] observed
+bool map_valid
+string map_generation_uuid
+string status

@@ -1,0 +1,54 @@
+system:
+  base_frame: base_link
+  tip_frame: rekep_tcp
+  joint_names: [joint1, joint2, joint3, joint4, joint5, joint6]
+  reset_joint_positions: [0.0, 1.57, -1.40, 0.0, 0.0, 0.0, 0.0]
+  workspace_bounds_min: [-0.20, -0.60, -0.07]
+  workspace_bounds_max: [0.80, 0.60, 0.80]
+
+vlm:
+  provider: qwen
+  model: qwen3-vl-plus
+  base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+  api_key_env: DASHSCOPE_API_KEY
+  timeout_s: 90.0
+
+robot_capabilities:
+  robot: Piper six-axis single arm with parallel gripper
+  supported_tasks: [grasp, transport, reorient, place, insert, empty-container-pour]
+  visual_keypoints: K0_to_KN_minus_1
+  end_effector_is_separate: true
+
+subgoal_solver:
+  bounds_min: [-0.20, -0.60, -0.07]
+  bounds_max: [0.80, 0.60, 0.80]
+  # Bounded M8 cold start; execution also enforces a 30 s subgoal deadline.
+  sampling_maxfun: 200
+  max_collision_points: 30
+  constraint_tolerance: 0.0001
+  minimizer_options: {maxiter: 30}
+
+path_solver:
+  bounds_min: [-0.20, -0.60, -0.07]
+  bounds_max: [0.80, 0.60, 0.80]
+  # Reserve time for continuous IK / OMPL inside the 60 s worker deadline.
+  sampling_maxfun: 40
+  max_collision_points: 30
+  constraint_tolerance: 0.0001
+  opt_pos_step_size: 0.20
+  opt_rot_step_size: 0.7853981633974483
+  opt_interpolate_pos_step_size: 0.02
+  opt_interpolate_rot_step_size: 0.10
+  minimizer_options: {maxiter: 30}
+
+rekpiper:
+  execution:
+    # Encoder/model zero disagreement may be normalized only at feedback
+    # ingress.  Planned trajectories remain subject to the exact URDF limits.
+    joint_feedback_boundary_tolerance_rad: 0.01
+  acceptance:
+    camera_extrinsics: false
+    piper_workspace: false
+    gripper_baseline: false
+    safe_map: false
+    emergency_stop: false

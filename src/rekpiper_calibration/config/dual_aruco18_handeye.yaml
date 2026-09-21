@@ -1,0 +1,69 @@
+schema_version: 1
+
+marker:
+  dictionary: DICT_4X4_50
+  id: 18
+  # Measure the OUTER SIDE of the black ArUco square, not the acrylic carrier.
+  marker_side_m: 0.100
+
+robot:
+  base_frame: base_link
+  effector_frame: link6
+
+capture:
+  # At 15 FPS, independent cameras can drift by nearly one frame.  The arm is
+  # stationary during each sample, so an 80 ms pairing window is acceptable.
+  image_pair_slop_s: 0.080
+  frames_per_pose: 50
+  capture_timeout_s: 15.0
+  tf_timeout_s: 0.10
+  # The formal calibration launch uses 640x360 color.  These limits are the
+  # 1/2-scale equivalents of the former 1280x720 60/80/60 px limits.
+  minimum_marker_edge_px: 30.0
+  preferred_marker_edge_px: 40.0
+  image_margin_px: 30.0
+  # Detection uses the original 640x360 image.  Only the rqt preview is
+  # resized when preview_width_px differs from the acquisition width.
+  preview_width_px: 640
+  preview_rate_hz: 10.0
+  stationary_translation_span_m_maximum: 0.002
+  stationary_rotation_span_deg_maximum: 0.20
+  minimum_optimization_poses: 18
+  minimum_validation_poses: 6
+  output_root: ~/.ros/rekpiper/camera/dual_aruco18
+
+# Both the fit and holdout set must excite translation and rotation.
+pose_diversity:
+  optimization_translation_axis_span_m: [0.05, 0.05, 0.03]
+  optimization_pair_rotation_deg: 20.0
+  validation_translation_axis_span_m: [0.03, 0.03, 0.02]
+  validation_pair_rotation_deg: 10.0
+
+cameras:
+  rs1:
+    serial: "346522071783"
+    image_topic: /rs1/color/image_raw
+    camera_info_topic: /rs1/color/camera_info
+    aligned_depth_topic: /rs1/aligned_depth_to_color/image_raw
+    optical_frame: rs1_color_optical_frame
+    link_frame: rs1_link
+  rs3:
+    serial: "934222070377"
+    image_topic: /rs3/color/image_raw
+    camera_info_topic: /rs3/color/camera_info
+    aligned_depth_topic: /rs3/aligned_depth_to_color/image_raw
+    optical_frame: rs3_color_optical_frame
+    link_frame: rs3_link
+
+hybrid_calibration:
+  depth_scale_to_m: 0.001
+  minimum_depth_m: 0.15
+  maximum_depth_m: 2.0
+  depth_grid_size: 5
+  depth_grid_inset_fraction: 0.14
+  depth_patch_radius_px: 2
+  minimum_depth_grid_points: 12
+  minimum_depth_frame_fraction: 0.60
+  depth_plane_outlier_threshold_m: 0.008
+  depth_plane_rmse_maximum_m: 0.006
+  depth_plane_minimum_second_span_m: 0.012

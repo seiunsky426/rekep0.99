@@ -1,0 +1,8 @@
+<?xml version="1.0"?>
+<launch>
+  <!-- No Piper SDK, service, action or CAN process is present. -->
+  <node pkg="rekpiper_execution" type="software_trajectory_sink_node.py"
+        name="software_trajectory_sink" output="screen" required="true">
+    <param name="command_rate_hz" value="20.0"/>
+  </node>
+</launch>

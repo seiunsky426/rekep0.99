@@ -1,0 +1,29 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>rekpiper_perception</name>
+  <version>0.1.0</version>
+  <description>ReKep keypoint proposal/tracking and Cutie object state estimation.</description>
+  <maintainer email="zhengsihze@example.com">zhengsihze</maintainer>
+  <license>Proprietary</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+  <depend>cv_bridge</depend>
+  <depend>geometry_msgs</depend>
+  <depend>message_filters</depend>
+  <depend>piper_msgs</depend>
+  <depend>rekpiper_acceptance</depend>
+  <depend>rekpiper_camera</depend>
+  <depend>rekpiper_msgs</depend>
+  <depend>rospy</depend>
+  <depend>sensor_msgs</depend>
+  <depend>std_msgs</depend>
+  <depend>tf2_ros</depend>
+  <depend>visualization_msgs</depend>
+  <exec_depend>python3-numpy</exec_depend>
+  <exec_depend>python3-opencv</exec_depend>
+  <exec_depend>python3-scipy</exec_depend>
+  <exec_depend>python3-sklearn</exec_depend>
+  <exec_depend>python3-torch</exec_depend>
+
+  <export/>
+</package>

@@ -1,0 +1,5 @@
+schema_version: 2
+artifact_type: runtime_performance_hardware
+status: UNAPPROVED
+approved: false
+payload: {}

@@ -1,0 +1,33 @@
+<?xml version="1.0"?>
+<launch>
+  <!-- Calibration-only telemetry: no control subscribers, services or CAN TX. -->
+  <arg name="can_port" default="can0"/>
+  <arg name="publish_rate_hz" default="100.0"/>
+  <arg name="feedback_timeout_s" default="0.20"/>
+  <arg name="fail_on_can_tx" default="true"/>
+
+  <param name="/robot_description"
+         textfile="$(find piper_description)/urdf/piper_description.urdf"/>
+
+  <node pkg="piper" type="piper_joint_state_readonly_node.py"
+        name="piper_joint_state_readonly" output="screen" required="true">
+    <param name="can_port" value="$(arg can_port)"/>
+    <param name="publish_rate_hz" value="$(arg publish_rate_hz)"/>
+    <param name="feedback_timeout_s" value="$(arg feedback_timeout_s)"/>
+    <param name="fail_on_can_tx" value="$(arg fail_on_can_tx)"/>
+  </node>
+
+  <node pkg="rekpiper_execution" type="gripper_joint_state_adapter_node.py"
+        name="piper_readonly_gripper_joint_state_adapter" output="screen"
+        required="true">
+    <param name="input_topic" value="/joint_states_single"/>
+    <param name="output_topic" value="/joint_states"/>
+    <param name="maximum_opening_m" value="0.070"/>
+  </node>
+
+  <node pkg="robot_state_publisher" type="robot_state_publisher"
+        name="piper_calibration_robot_state_publisher" output="screen"
+        required="true">
+    <remap from="joint_states" to="/joint_states"/>
+  </node>
+</launch>

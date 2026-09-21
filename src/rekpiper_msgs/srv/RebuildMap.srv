@@ -1,0 +1,5 @@
+string reason
+---
+bool success
+string map_generation_uuid
+string message

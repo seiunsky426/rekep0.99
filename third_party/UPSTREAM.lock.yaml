@@ -1,0 +1,31 @@
+schema_version: 1
+rekep:
+  repository: https://github.com/huangwl18/ReKep.git
+  commit: 63c43fdba60354980258beaeb8a7d48e088e1e3e
+  files:
+    .gitignore: cc85f6b7a65d5a19e837403875d0864e738149660018d721ab9cca892c6c6481
+    README.md: ef4ac1b6fdb6c6e5a258d3139981bdbf22215dc012ef011a6bec72b95be48aa7
+    configs/config.yaml: 62265ff74917e50d0c3f378f9dbd72b165e372b7d267f28b420b503f3af9afc6
+    configs/og_scene_file_pen.json: ed4da14ee629fce567ba77518ebff24f8f885bb5e6f55a7ecfe216c8dc9844ed
+    constraint_generation.py: 4dc2f0506a92a5d5e6798a3a411da073d61b07c3cf46f4fd430c27e549b991ef
+    environment.py: 85461a3c2515b7b8ade411542e049c4e404e4c6d0522fea2eef096dcbd2f2bbb
+    ik_solver.py: f55172a2010ffb6431b98db93cf14df4563ea5bb49d33d9ccfd95cbf4c9cb49d
+    keypoint_proposal.py: de120fe4365a735a614de50d3fae948926ae8b058882447b8372c5ab1ba5a04e
+    main.py: 0195d94a2b4a3261be108ef82fceb180d9572597f5984276cf4e29a7c3fd6a61
+    media/pen-in-holder-disturbances.gif: e3dcec4aa20e22d4e3e77a82c4b706c65c59b3876a50629c16ddde0d74dd4458
+    media/pen-in-holder.gif: 9e6daf0dbf13a23fc87722dccdc9f1cfc547cd1ff2775909e37dc5a28925033e
+    og_utils.py: 58810b3a3de594aede6b00b49e1a70f194ed4cb528008ab079226427df0d4a8f
+    path_solver.py: a6f858c57a921f6d47594b234413ee1afe11cf86cdcdff80d1577f3fbece0cd2
+    requirements.txt: 2bd3024e164d9e69300fa39c3669363ba8a3d69a09bb01d0a0a7ba914074a53b
+    subgoal_solver.py: dbb0b69b44c4a7a167f1c0686214eef0d47eeffbdebad6b5ce5bfcd56a852218
+    transform_utils.py: ca0a0ecafbd193bf05a471e407e4d9cfbfab6ed1dc9b9262fdadc689a6dc5d12
+    utils.py: 5e2ab110e941f044b5afefa40c53fa89caa2a21e96add669af7b815b535ceb66
+    visualizer.py: e96a3d7685d73e8152ab1929d4f8359cb213bd2261b1f8679921e22053b21df2
+    vlm_query/pen/metadata.json: 3291f693b6a3c38e35f933ad5042265c5cba5c6dce4e7283ab53a99715cec3e7
+    vlm_query/pen/query_img.png: 2467ac37515d330848159022bc1ba8d19771f628ab711120509a0b7f6a88b9cc
+    vlm_query/pen/stage1_subgoal_constraints.txt: 21a73b9cc10cfac09df17a993c49e59cfd427762aa3ef42dee8486fb24a05f07
+    vlm_query/pen/stage2_path_constraints.txt: bae5c36fc2fac6a7333ee57f4687fb12dbce0ccdb29f43c1588f2a2408462130
+    vlm_query/pen/stage2_subgoal_constraints.txt: 069fb527917adea357089016914791aae6a86e7ec272781237d7c295b651c709
+    vlm_query/pen/stage3_path_constraints.txt: b9d4183091a40d70a8d97b595a3b57514dd58a97c000e45523886d53809558f3
+    vlm_query/pen/stage3_subgoal_constraints.txt: bfdbde66cb2fafb926325c1ca2445d741a4c3381667647cd7ec73faa3a338a5e
+    vlm_query/prompt_template.txt: 0cda5043e2353e20a3e11c8a830f76bcf1441b7878af288452949898b8c078a0

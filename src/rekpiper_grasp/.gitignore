@@ -1,0 +1,17 @@
+# Licensed/proprietary and machine-bound artifacts must never enter Git.
+license/
+**/license/
+*.lic
+*.signature
+*.public_key
+feature_id*
+
+# Large third-party checkpoints and local isolated environments.
+models/
+.venv-anygrasp/
+*.tar
+*.pth
+*.pt
+
+# Runtime review evidence can contain scene images.
+evidence/

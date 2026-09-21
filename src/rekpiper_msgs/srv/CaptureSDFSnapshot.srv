@@ -1,0 +1,5 @@
+# Rebuild one observation-only map and export its immutable planning snapshot.
+---
+bool success
+string message
+rekpiper_msgs/SDFGrid grid

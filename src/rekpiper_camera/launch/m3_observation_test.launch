@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<launch>
+  <!-- Explicit provisional observation session; requires live rs1/rs3 drivers.
+       Candidate files stay outside source config. No robot/control nodes. -->
+  <arg name="rs1_extrinsics"/>
+  <arg name="rs3_extrinsics"/>
+  <arg name="recognition_workspace"
+       default="$(find rekpiper_camera)/config/recognition_workspace.yaml"/>
+
+  <include file="$(find rekpiper_camera)/launch/publish_fixed_camera_extrinsics.launch">
+    <arg name="rs1_extrinsics" value="$(arg rs1_extrinsics)"/>
+    <arg name="rs3_extrinsics" value="$(arg rs3_extrinsics)"/>
+    <arg name="allow_provisional" value="true"/>
+    <arg name="mode" value="shadow"/>
+  </include>
+  <include file="$(find rekpiper_camera)/launch/dual_rgbd_runtime.launch">
+    <arg name="start_cameras" value="false"/>
+    <arg name="mode" value="shadow"/>
+    <arg name="recognition_workspace" value="$(arg recognition_workspace)"/>
+  </include>
+  <include file="$(find rekpiper_camera)/launch/dual_workspace_cloud_fusion.launch"/>
+</launch>

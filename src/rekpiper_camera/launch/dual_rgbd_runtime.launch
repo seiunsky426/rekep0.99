@@ -1,0 +1,85 @@
+<?xml version="1.0"?>
+<launch>
+  <!-- Read-only dual-D435 scene perception. No Piper/CAN/control nodes. -->
+  <arg name="start_cameras" default="true"/>
+  <arg name="start_projection" default="true"/>
+  <arg name="mode" default="shadow"/>
+  <arg name="release_bundle" default=""/>
+  <arg name="acceptance_public_key" default=""/>
+  <arg name="minimum_release_counter" default=""/>
+  <arg name="robot_id" default="piper-rekpiper"/>
+  <arg name="serial_rs1" default="346522071783"/>
+  <arg name="serial_rs3" default="934222070377"/>
+  <arg name="initial_reset" default="false"/>
+  <arg name="width" default="640"/>
+  <arg name="height" default="360"/>
+  <arg name="fps" default="30"/>
+  <arg name="target_frame" default="base_link"/>
+  <arg name="recognition_workspace"
+       default="$(find rekpiper_camera)/config/recognition_workspace.yaml"/>
+  <arg name="rs1_extrinsics"
+       default="$(find rekpiper_camera)/config/active_fixed_camera_extrinsics/rs1_extrinsics.yaml"/>
+  <arg name="rs3_extrinsics"
+       default="$(find rekpiper_camera)/config/active_fixed_camera_extrinsics/rs3_extrinsics.yaml"/>
+
+  <group if="$(arg start_cameras)">
+    <include file="$(find rekpiper_camera)/launch/dual_camera_formal_tf_bringup.launch">
+      <arg name="serial_rs1" value="$(arg serial_rs1)"/>
+      <arg name="serial_rs3" value="$(arg serial_rs3)"/>
+      <arg name="mode" value="$(arg mode)"/>
+      <arg name="release_bundle" value="$(arg release_bundle)"/>
+      <arg name="acceptance_public_key" value="$(arg acceptance_public_key)"/>
+      <arg name="minimum_release_counter" value="$(arg minimum_release_counter)"/>
+      <arg name="robot_id" value="$(arg robot_id)"/>
+      <arg name="initial_reset" value="$(arg initial_reset)"/>
+      <!-- The installed RealSense launch may race its nodelet manager on a
+           cold ROS master. A loader retry is read-only and resolves that race. -->
+      <arg name="camera_respawn" value="true"/>
+      <arg name="width" value="$(arg width)"/>
+      <arg name="height" value="$(arg height)"/>
+      <arg name="fps" value="$(arg fps)"/>
+      <arg name="rs1_extrinsics" value="$(arg rs1_extrinsics)"/>
+      <arg name="rs3_extrinsics" value="$(arg rs3_extrinsics)"/>
+    </include>
+  </group>
+
+  <group if="$(arg start_projection)">
+    <node pkg="rekpiper_camera" type="rgbd_projection_node.py"
+          name="rs1_rgbd_projection" output="screen" required="true">
+      <param name="target_frame" value="$(arg target_frame)"/>
+      <param name="optical_frame" value="rs1_color_optical_frame"/>
+      <param name="rgb_topic" value="/rs1/color/image_raw"/>
+      <param name="depth_topic"
+             value="/rs1/aligned_depth_to_color/image_raw"/>
+      <param name="camera_info_topic" value="/rs1/color/camera_info"/>
+      <param name="points_output_topic"
+             value="/rekpiper/camera/rs1/points_base"/>
+    </node>
+    <node pkg="rekpiper_camera" type="rgbd_projection_node.py"
+          name="rs3_rgbd_projection" output="screen" required="true">
+      <param name="target_frame" value="$(arg target_frame)"/>
+      <param name="optical_frame" value="rs3_color_optical_frame"/>
+      <param name="rgb_topic" value="/rs3/color/image_raw"/>
+      <param name="depth_topic"
+             value="/rs3/aligned_depth_to_color/image_raw"/>
+      <param name="camera_info_topic" value="/rs3/color/camera_info"/>
+      <param name="points_output_topic"
+             value="/rekpiper/camera/rs3/points_base"/>
+    </node>
+
+    <!-- Canonical input for object recognition. Raw points_base stays
+         available for diagnostics; downstream recognition uses this filter. -->
+    <node pkg="rekpiper_camera" type="workspace_filter_node.py"
+          name="recognition_workspace_filter" output="screen" required="true">
+      <rosparam command="load"
+                file="$(arg recognition_workspace)"/>
+      <rosparam param="input_cameras">[rs1, rs3]</rosparam>
+      <param name="mode" value="$(arg mode)"/>
+      <param name="release_bundle" value="$(arg release_bundle)"/>
+      <param name="acceptance_public_key" value="$(arg acceptance_public_key)"/>
+      <param name="minimum_release_counter" value="$(arg minimum_release_counter)"/>
+      <param name="robot_id" value="$(arg robot_id)"/>
+    </node>
+  </group>
+
+</launch>

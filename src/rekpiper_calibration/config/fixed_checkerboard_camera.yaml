@@ -1,0 +1,55 @@
+schema_version: 1
+
+# Operator-accepted five-pose result.  It is a working reference, not an
+# independently certified absolute base-frame measurement.
+base_frame: base_link
+checkerboard_frame: rekep_checkerboard
+base_T_checkerboard:
+  - [-0.028187592996251946, -0.9996023748905978, -0.0007427746323500073, 0.6127698981240614]
+  - [-0.9989176824515242, 0.028140766189888748, 0.03703459145072162, 0.14298169669446514]
+  - [-0.03699896331998348, 0.0017858867049261318, -0.999313708162719, -0.007230505746955327]
+  - [0.0, 0.0, 0.0, 1.0]
+
+target:
+  type: checkerboard_with_aruco_orientation
+  pattern_cols: 11
+  pattern_rows: 8
+  square_size_m: 0.025
+  point_count: 88
+  orientation_marker:
+    # Physical fixed board in this workspace: the existing ArUco ID 18 card
+    # uses the 4x4_50 dictionary (not the 5x5_100 card used by the separate
+    # hand-mounted checkerboard workflow).
+    dictionary: DICT_4X4_50
+    marker_id: 18
+    marker_size_m: 0.100
+    expected_min_x_m: 0.250
+    # The ID 18 card centre on the physical fixed board is about y=0.164 m
+    # in checkerboard coordinates.  0.150 m accepts that lower/right marker
+    # placement while still rejecting the opposite ordering (near y=0).
+    expected_min_y_m: 0.150
+
+quality:
+  # Fixed external camera observes this 11 x 8 target from about 1.5 m.
+  # At that range a 2.8% board area and ~20 px median cell width are still
+  # well-conditioned for the joint 88-corner PnP fit.
+  minimum_board_area_ratio: 0.015
+  minimum_median_cell_px: 12.0
+  minimum_cell_px: 8.0
+  image_margin_px: 20.0
+  minimum_laplacian_variance: 50.0
+  maximum_saturation_ratio: 0.20
+  maximum_reprojection_rmse_px: 0.80
+  maximum_corner_reprojection_px: 2.00
+  maximum_ippe_best_to_second_ratio: 0.95
+
+capture:
+  frames_per_trial: 30
+  required_trials: 5
+  capture_timeout_s: 15.0
+  tf_timeout_s: 0.10
+  pnp_translation_span_m_maximum: 0.0015
+  pnp_rotation_span_deg_maximum: 0.15
+  trial_translation_repeatability_m_maximum: 0.005
+  trial_rotation_repeatability_deg_maximum: 0.50
+  output_root: ~/.ros/rekpiper/camera/fixed_checkerboard

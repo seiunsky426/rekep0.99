@@ -1,0 +1,20 @@
+<launch>
+  <arg name="session"/>
+  <arg name="execute" default="false"/>
+  <param name="/robot_description" textfile="$(find piper_description)/urdf/piper_description.urdf"/>
+  <node pkg="rekpiper_calibration" type="calibration_motion_node.py"
+        name="calibration_motion" output="screen" required="true">
+    <param name="session" value="$(arg session)"/>
+    <param name="execute" value="$(arg execute)"/>
+  </node>
+  <node pkg="rekpiper_execution" type="gripper_joint_state_adapter_node.py"
+        name="calibration_motion_joint_adapter" output="screen" required="true">
+    <param name="input_topic" value="/joint_states_single"/>
+    <param name="output_topic" value="/joint_states"/>
+    <param name="maximum_opening_m" value="0.070"/>
+  </node>
+  <node pkg="robot_state_publisher" type="robot_state_publisher"
+        name="calibration_motion_robot_state_publisher" required="true">
+    <remap from="joint_states" to="/joint_states"/>
+  </node>
+</launch>

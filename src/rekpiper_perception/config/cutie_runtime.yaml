@@ -1,0 +1,11 @@
+require_cuda: true
+max_internal_size: 480
+maximum_active_objects: 4
+minimum_mask_pixels: 200
+minimum_track_confidence: 0.80
+maximum_cross_camera_centroid_m: 0.020
+minimum_dino_cosine_similarity: 0.65
+occlusion_depth_margin_m: 0.030
+maximum_track_age_s: 0.30
+reacquire_every_frames: 15
+maximum_reacquire_displacement_m: 0.050

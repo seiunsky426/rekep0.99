@@ -1,0 +1,1979 @@
+--- a/constraint_generation.py
++++ b/constraint_generation.py
+@@ -10,11 +10,27 @@
+ 
+ # Function to encode the image
+ def encode_image(image_path):
++    """读取图片并编码为 OpenAI 图像消息所需的 Base64 字符串。
++
++    Args:
++        image_path (str): 待编码图片的文件路径。
++
++    Returns:
++        str: 使用 UTF-8 表示的 Base64 图片内容。
++    """
+     with open(image_path, "rb") as image_file:
+         return base64.b64encode(image_file.read()).decode('utf-8')
+ 
+ class ConstraintGenerator:
+     def __init__(self, config):
++        """初始化约束生成器、OpenAI 客户端和提示词模板。
++
++        Args:
++            config (dict): 生成模型、温度和最大 token 数等配置。
++
++        Returns:
++            None: 构造函数不返回值。
++        """
+         self.config = config
+         self.client = OpenAI(api_key=os.environ['OPENAI_API_KEY'])
+         self.base_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), './vlm_query')
+@@ -22,6 +38,15 @@
+             self.prompt_template = f.read()
+ 
+     def _build_prompt(self, image_path, instruction):
++        """构造包含任务文本和场景图片的多模态请求消息。
++
++        Args:
++            image_path (str): 场景图片路径。
++            instruction (str): 用户给出的自然语言任务指令。
++
++        Returns:
++            list[dict]: 可直接传给聊天补全接口的消息列表。
++        """
+         img_base64 = encode_image(image_path)
+         prompt_text = self.prompt_template.format(instruction=instruction)
+         # save prompt
+@@ -47,6 +72,15 @@
+         return messages
+ 
+     def _parse_and_save_constraints(self, output, save_dir):
++        """从模型输出中提取约束函数，并按阶段和类型写入文本文件。
++
++        Args:
++            output (str): 视觉语言模型返回的原始文本。
++            save_dir (str): 约束文件的保存目录。
++
++        Returns:
++            None: 结果直接写入 ``save_dir``。
++        """
+         # parse into function blocks
+         lines = output.split("\n")
+         functions = dict()
+@@ -73,6 +107,15 @@
+         print(f"Constraints saved to {save_dir}")
+     
+     def _parse_other_metadata(self, output):
++        """解析模型输出中的阶段数、抓取关键点和释放关键点。
++
++        Args:
++            output (str): 视觉语言模型返回的原始文本。
++
++        Returns:
++            dict: 包含 ``num_stages``、``grasp_keypoints`` 和
++            ``release_keypoints`` 的元数据。
++        """
+         data_dict = dict()
+         # find num_stages
+         num_stages_template = "num_stages = {num_stages}"
+@@ -110,6 +153,14 @@
+         return data_dict
+ 
+     def _save_metadata(self, metadata):
++        """将任务元数据转换为 JSON 可序列化形式并保存。
++
++        Args:
++            metadata (dict): 待保存的任务元数据；其中 NumPy 数组会转成列表。
++
++        Returns:
++            None: 元数据写入当前任务目录的 ``metadata.json``。
++        """
+         for k, v in metadata.items():
+             if isinstance(v, np.ndarray):
+                 metadata[k] = v.tolist()
+@@ -118,10 +169,13 @@
+         print(f"Metadata saved to {os.path.join(self.task_dir, 'metadata.json')}")
+ 
+     def generate(self, img, instruction, metadata):
+-        """
++        """调用视觉语言模型生成 ReKep 约束程序并保存任务文件。
++
+         Args:
+             img (np.ndarray): image of the scene (H, W, 3) uint8
+             instruction (str): instruction for the query
++            metadata (dict): 与场景关键点相关、需要一并保存的初始元数据。
++
+         Returns:
+             save_dir (str): directory where the constraints
+         """
+--- a/environment.py
++++ b/environment.py
+@@ -56,6 +56,16 @@
+ 
+ class ReKepOGEnv:
+     def __init__(self, config, scene_file, verbose=False):
++        """创建 OmniGibson 场景、Fetch 机器人和任务相机。
++
++        Args:
++            config (dict): 环境、机器人、相机、边界及插值参数配置。
++            scene_file (str): OmniGibson 场景描述文件路径。
++            verbose (bool): 是否输出详细的规划与控制状态。
++
++        Returns:
++            None: 构造函数不返回值。
++        """
+         self.video_cache = []
+         self.config = config
+         self.verbose = verbose
+@@ -83,10 +93,16 @@
+     # = exposed functions
+     # ======================================
+     def get_sdf_voxels(self, resolution, exclude_robot=True, exclude_obj_in_hand=True):
+-        """
+-        open3d-based SDF computation
+-        1. recursively get all usd prim and get their vertices and faces
+-        2. compute SDF using open3d
++        """收集场景碰撞网格，并用 Open3D 计算工作空间的体素 SDF。
++
++        Args:
++            resolution (float): 目标体素边长。
++            exclude_robot (bool): 是否从 SDF 障碍物中排除机器人几何体。
++            exclude_obj_in_hand (bool): 是否排除当前被夹持物体。
++
++        Returns:
++            np.ndarray: 覆盖工作空间的三维有符号距离体素；本项目约定障碍物
++            内部为正值。
+         """
+         start = time.time()
+         exclude_names = ['wall', 'floor', 'ceiling']
+@@ -138,6 +154,11 @@
+         return sdf_voxels
+ 
+     def get_cam_obs(self):
++        """采集并缓存所有已注册相机的当前观测。
++
++        Returns:
++            dict: 从相机编号映射到 RGB、深度、点云和分割观测的字典。
++        """
+         self.last_cam_obs = dict()
+         for cam_id in self.cams:
+             self.last_cam_obs[cam_id] = self.cams[cam_id].get_obs()  # each containing rgb, depth, points, seg
+@@ -219,8 +240,13 @@
+         return self._keypoint2object[keypoint_idx]
+ 
+     def get_collision_points(self, noise=True):
+-        """
+-        Get the points of the gripper and any object in hand.
++        """采样夹爪、腕部以及手中物体的世界坐标碰撞点。
++
++        Args:
++            noise (bool): 为兼容调用方保留；当前实现不根据该值添加噪声。
++
++        Returns:
++            np.ndarray: 形状为 ``(N, 3)`` 的碰撞表面采样点。
+         """
+         # add gripper collision points
+         collision_points = []
+@@ -259,6 +285,11 @@
+         return collision_points
+ 
+     def reset(self):
++        """复位场景与机器人，张开夹爪并将机械臂移出相机视野。
++
++        Returns:
++            None: 环境状态和视频缓存会被原地重置。
++        """
+         self.og_env.reset()
+         self.robot.reset()
+         for _ in range(5): self._step()
+@@ -272,20 +303,48 @@
+         print(f'{bcolors.HEADER}Reset done.{bcolors.ENDC}')
+ 
+     def is_grasping(self, candidate_obj=None):
++        """判断机器人是否正在抓取指定对象或任意对象。
++
++        Args:
++            candidate_obj: 可选的 OmniGibson 场景对象；为 ``None`` 时检查任意抓取。
++
++        Returns:
++            bool: 底层抓取状态为 ``TRUE`` 时返回真。
++        """
+         return self.robot.is_grasping(candidate_obj=candidate_obj) == IsGraspingState.TRUE
+ 
+     def get_ee_pose(self):
++        """获取末端执行器的世界坐标位姿。
++
++        Returns:
++            np.ndarray: ``[x, y, z, qx, qy, qz, qw]`` 七维位姿。
++        """
+         ee_pos, ee_xyzw = (self.robot.get_eef_position(), self.robot.get_eef_orientation())
+         ee_pose = np.concatenate([ee_pos, ee_xyzw])  # [7]
+         return ee_pose
+ 
+     def get_ee_pos(self):
++        """获取末端执行器的世界坐标位置。
++
++        Returns:
++            np.ndarray: ``[x, y, z]`` 三维位置。
++        """
+         return self.get_ee_pose()[:3]
+ 
+     def get_ee_quat(self):
++        """获取末端执行器的世界坐标四元数。
++
++        Returns:
++            np.ndarray: ``[qx, qy, qz, qw]`` 四元数。
++        """
+         return self.get_ee_pose()[3:]
+     
+     def get_arm_joint_postions(self):
++        """读取 Fetch 躯干升降关节和默认机械臂的当前关节位置。
++
++        Returns:
++            np.ndarray: 按求解器自由度顺序排列的关节位置。
++        """
+         assert isinstance(self.robot, Fetch), "The IK solver assumes the robot is a Fetch robot"
+         arm = self.robot.default_arm
+         dof_idx = np.concatenate([self.robot.trunk_control_idx, self.robot.arm_control_idx[arm]])
+@@ -296,6 +355,9 @@
+         """
+         Exposed interface: 1.0 for closed, -1.0 for open, 0.0 for no change
+         Internal OG interface: 1.0 for open, 0.0 for closed
++
++        Returns:
++            None: 夹爪状态会在仿真中原地更新。
+         """
+         if self.last_og_gripper_action == 0.0:
+             return
+@@ -306,6 +368,11 @@
+         self.last_og_gripper_action = 0.0
+ 
+     def open_gripper(self):
++        """执行多步控制以张开夹爪；若已张开则直接返回。
++
++        Returns:
++            None: 夹爪状态会在仿真中原地更新。
++        """
+         if self.last_og_gripper_action == 1.0:
+             return
+         action = np.zeros(12)
+@@ -315,18 +382,46 @@
+         self.last_og_gripper_action = 1.0
+ 
+     def get_last_og_gripper_action(self):
++        """返回最近一次发送给 OmniGibson 的夹爪控制值。
++
++        Returns:
++            float: OmniGibson 约定的夹爪值，``1.0`` 为开、``0.0`` 为闭。
++        """
+         return self.last_og_gripper_action
+     
+     def get_gripper_open_action(self):
++        """返回 ReKep 动作空间中的张开夹爪指令。
++
++        Returns:
++            float: 固定为 ``-1.0``。
++        """
+         return -1.0
+     
+     def get_gripper_close_action(self):
++        """返回 ReKep 动作空间中的闭合夹爪指令。
++
++        Returns:
++            float: 固定为 ``1.0``。
++        """
+         return 1.0
+     
+     def get_gripper_null_action(self):
++        """返回 ReKep 动作空间中的夹爪保持指令。
++
++        Returns:
++            float: 固定为 ``0.0``。
++        """
+         return 0.0
+     
+     def compute_target_delta_ee(self, target_pose):
++        """计算当前末端位姿相对目标位姿的位置和旋转误差。
++
++        Args:
++            target_pose (np.ndarray): 七维目标位置与四元数。
++
++        Returns:
++            tuple[float, float]: 位置欧氏距离和四元数角距离（弧度）。
++        """
+         target_pos, target_xyzw = target_pose[:3], target_pose[3:]
+         ee_pose = self.get_ee_pose()
+         ee_pos, ee_xyzw = ee_pose[:3], ee_pose[3:]
+@@ -413,11 +508,28 @@
+             return pos_error, rot_error
+     
+     def sleep(self, seconds):
++        """在指定墙钟时间内持续推进仿真并采集视频帧。
++
++        Args:
++            seconds (float): 等待时长，单位为秒。
++
++        Returns:
++            None: 仿真状态会持续推进。
++        """
+         start = time.time()
+         while time.time() - start < seconds:
+             self._step()
+     
+     def save_video(self, save_path=None):
++        """将缓存的 RGB 帧编码为 30 FPS 的 MP4 视频。
++
++        Args:
++            save_path (str | None): 输出路径；为 ``None`` 时在 ``videos`` 目录
++                生成带时间戳的文件名。
++
++        Returns:
++            str: 实际写入的视频文件路径。
++        """
+         save_dir = os.path.join(os.path.dirname(__file__), 'videos')
+         os.makedirs(save_dir, exist_ok=True)
+         if save_path is None:
+@@ -432,8 +544,16 @@
+     # = internal functions
+     # ======================================
+     def _check_reached_ee(self, target_pos, target_xyzw, pos_threshold, rot_threshold):
+-        """
+-        this is supposed to be for true ee pose (franka hand) in robot frame
++        """检查真实末端位姿是否进入给定位置和角度容差。
++
++        Args:
++            target_pos (np.ndarray): 三维目标位置。
++            target_xyzw (np.ndarray): ``xyzw`` 顺序的目标四元数。
++            pos_threshold (float): 允许的位置误差。
++            rot_threshold (float): 允许的旋转误差，单位为度。
++
++        Returns:
++            tuple[bool, float, float]: 是否到达、位置误差和旋转误差（弧度）。
+         """
+         current_pos = self.robot.get_eef_position()
+         current_xyzw = self.robot.get_eef_orientation()
+@@ -453,6 +573,17 @@
+         return False, pos_error, rot_error
+ 
+     def _move_to_waypoint(self, target_pose_world, pos_threshold=0.02, rot_threshold=3.0, max_steps=10):
++        """使用相对 OSC 动作迭代逼近一个世界坐标系末端航点。
++
++        Args:
++            target_pose_world (np.ndarray): 七维世界坐标目标位姿。
++            pos_threshold (float): 到达判定的位置阈值。
++            rot_threshold (float): 到达判定的角度阈值，单位为度。
++            max_steps (int): 最大控制步数。
++
++        Returns:
++            None: 机器人和仿真状态会被原地推进。
++        """
+         pos_errors = []
+         rot_errors = []
+         count = 0
+@@ -479,6 +610,15 @@
+             print(f'{bcolors.WARNING}[environment.py | {get_clock_time()}] OSC pose not reached after {max_steps} steps (pos_error: {pos_errors[-1].round(4)}, rot_error: {np.rad2deg(rot_errors[-1]).round(4)}){bcolors.ENDC}')
+ 
+     def _step(self, action=None):
++        """应用可选扰动和控制动作，推进一步仿真并更新视频缓存。
++
++        Args:
++            action (np.ndarray | None): OmniGibson 机器人动作；为 ``None`` 时仅
++                推进物理仿真。
++
++        Returns:
++            None: 环境状态、视频缓存和步计数器会被更新。
++        """
+         if hasattr(self, 'disturbance_seq') and self.disturbance_seq is not None:
+             next(self.disturbance_seq)
+         if action is not None:
+@@ -495,11 +635,16 @@
+         self.step_counter += 1
+ 
+     def _initialize_cameras(self, cam_config):
+-        """
+-        ::param poses: list of tuples of (position, orientation) of the cameras
++        """按照配置创建所有任务相机，并预渲染以完成传感器初始化。
++
++        Args:
++            cam_config (dict): 从相机编号映射到相机配置的字典。
++
++        Returns:
++            None: 创建的相机保存在 ``self.cams`` 中。
+         """
+         self.cams = dict()
+         for cam_id in cam_config:
+             cam_id = int(cam_id)
+             self.cams[cam_id] = OGCamera(self.og_env, cam_config[cam_id])
+-        for _ in range(10): og.sim.render()+        for _ in range(10): og.sim.render()
+--- a/ik_solver.py
++++ b/ik_solver.py
+@@ -17,6 +17,19 @@
+         reset_joint_pos,
+         world2robot_homo,
+     ):
++        """加载 Lula 机器人模型并配置循环坐标下降 IK 求解器。
++
++        Args:
++            robot_description_path (str): Lula 机器人描述文件路径。
++            robot_urdf_path (str): 机器人 URDF 文件路径。
++            eef_name (str): 末端执行器链接名称。
++            reset_joint_pos (np.ndarray): 无显式初值时使用的复位关节位置。
++            world2robot_homo (np.ndarray): 世界坐标系到机器人基座坐标系的
++                ``(4, 4)`` 齐次变换矩阵。
++
++        Returns:
++            None: 构造函数不返回值。
++        """
+         # Create robot description, kinematics, and config
+         self.robot_description = lazy.lula.load_robot(robot_description_path, robot_urdf_path)
+         self.kinematics = self.robot_description.kinematics()
+@@ -66,4 +79,4 @@
+         self.config.max_num_descents = max_iterations
+         # Compute target joint positions
+         ik_results = lazy.lula.compute_ik_ccd(self.kinematics, ik_target_pose, self.eef_name, self.config)
+-        return ik_results+        return ik_results
+--- a/keypoint_proposal.py
++++ b/keypoint_proposal.py
+@@ -8,6 +8,14 @@
+ 
+ class KeypointProposer:
+     def __init__(self, config):
++        """初始化 DINOv2 特征提取器和关键点聚类器。
++
++        Args:
++            config (dict): 设备、工作空间边界、聚类参数和随机种子配置。
++
++        Returns:
++            None: 构造函数不返回值。
++        """
+         self.config = config
+         self.device = torch.device(self.config['device'])
+         self.dinov2 = torch.hub.load('facebookresearch/dinov2', 'dinov2_vits14').eval().to(self.device)
+@@ -20,6 +28,17 @@
+         torch.cuda.manual_seed(self.config['seed'])
+ 
+     def get_keypoints(self, rgb, points, masks):
++        """从 RGB-D 点和分割标签中提出稀疏、语义显著的三维关键点。
++
++        Args:
++            rgb (np.ndarray): 形状为 ``(H, W, 3)`` 的 RGB 图像。
++            points (np.ndarray): 形状为 ``(H, W, 3)`` 的世界坐标点图。
++            masks (np.ndarray): 形状为 ``(H, W)`` 的实例或语义标签图。
++
++        Returns:
++            tuple[np.ndarray, np.ndarray]: 三维候选关键点 ``(N, 3)``，以及绘制
++            关键点编号后的 RGB 图像。
++        """
+         # preprocessing
+         transformed_rgb, rgb, points, masks, shape_info = self._preprocess(rgb, points, masks)
+         # get features
+@@ -46,6 +65,17 @@
+         return candidate_keypoints, projected
+ 
+     def _preprocess(self, rgb, points, masks):
++        """二值化各标签掩码，并将图像尺寸裁整到 DINOv2 patch 的倍数。
++
++        Args:
++            rgb (np.ndarray): 原始 RGB 图像。
++            points (np.ndarray): 与原图逐像素对齐的三维点图。
++            masks (np.ndarray): 标签图。
++
++        Returns:
++            tuple: 依次为归一化且缩放后的图像、原 RGB 图、原点图、二值掩码
++            列表，以及记录原尺寸和 patch 网格尺寸的字典。
++        """
+         # convert masks to binary masks
+         masks = [masks == uid for uid in np.unique(masks)]
+         # ensure input shape is compatible with dinov2
+@@ -66,6 +96,19 @@
+         return transformed_rgb, rgb, points, masks, shape_info
+     
+     def _project_keypoints_to_img(self, rgb, candidate_pixels, candidate_rigid_group_ids, masks, features_flat):
++        """在 RGB 图像上绘制候选关键点编号。
++
++        Args:
++            rgb (np.ndarray): 原始 RGB 图像。
++            candidate_pixels (np.ndarray): 每个关键点对应的 ``(row, col)`` 像素。
++            candidate_rigid_group_ids (np.ndarray): 每个候选点所属的刚体组编号；
++                当前实现保留该参数但不参与绘制。
++            masks (list[np.ndarray]): 二值对象掩码；当前实现未使用。
++            features_flat (torch.Tensor): 逐像素特征；当前实现未使用。
++
++        Returns:
++            np.ndarray: 绘制关键点编号后的 RGB 图像副本。
++        """
+         projected = rgb.copy()
+         # overlay keypoints on the image
+         for keypoint_count, pixel in enumerate(candidate_pixels):
+@@ -86,6 +129,15 @@
+     @torch.inference_mode()
+     @torch.amp.autocast('cuda')
+     def _get_features(self, transformed_rgb, shape_info):
++        """提取 DINOv2 patch 特征，并双线性上采样到原图每个像素。
++
++        Args:
++            transformed_rgb (np.ndarray): 已归一化且适配 patch 尺寸的 RGB 图像。
++            shape_info (dict): 原图高度、宽度及 patch 网格尺寸。
++
++        Returns:
++            torch.Tensor: 形状为 ``(H * W, feature_dim)`` 的逐像素特征。
++        """
+         img_h = shape_info['img_h']
+         img_w = shape_info['img_w']
+         patch_h = shape_info['patch_h']
+@@ -104,6 +156,17 @@
+         return features_flat
+ 
+     def _cluster_features(self, points, features_flat, masks):
++        """在每个对象掩码内联合聚类视觉特征和三维位置，产生候选关键点。
++
++        Args:
++            points (np.ndarray): 与图像对齐的三维点图。
++            features_flat (torch.Tensor): 展平后的逐像素 DINOv2 特征。
++            masks (list[np.ndarray]): 各刚体组的二值掩码。
++
++        Returns:
++            tuple[np.ndarray, np.ndarray, np.ndarray]: 候选三维点、对应像素坐标，
++            以及所属刚体组编号。
++        """
+         candidate_keypoints = []
+         candidate_pixels = []
+         candidate_rigid_group_ids = []
+@@ -152,10 +215,18 @@
+         return candidate_keypoints, candidate_pixels, candidate_rigid_group_ids
+ 
+     def _merge_clusters(self, candidate_keypoints):
++        """合并空间上相邻的候选点，并为每个均值漂移中心选择代表点。
++
++        Args:
++            candidate_keypoints (np.ndarray): 形状为 ``(N, 3)`` 的候选关键点。
++
++        Returns:
++            list[int]: 合并后保留的原候选点索引。
++        """
+         self.mean_shift.fit(candidate_keypoints)
+         cluster_centers = self.mean_shift.cluster_centers_
+         merged_indices = []
+         for center in cluster_centers:
+             dist = np.linalg.norm(candidate_keypoints - center, axis=-1)
+             merged_indices.append(np.argmin(dist))
+-        return merged_indices+        return merged_indices
+--- a/main.py
++++ b/main.py
+@@ -24,6 +24,15 @@
+ 
+ class Main:
+     def __init__(self, scene_file, visualize=False):
++        """初始化 ReKep 感知、约束生成、规划、仿真和可视化组件。
++
++        Args:
++            scene_file (str): OmniGibson 场景文件路径。
++            visualize (bool): 是否在执行前显示关键点、子目标和路径。
++
++        Returns:
++            None: 构造函数不返回值。
++        """
+         global_config = get_config(config_path="./configs/config.yaml")
+         self.config = global_config['main']
+         self.bounds_min = np.array(self.config['bounds_min'])
+@@ -55,6 +64,17 @@
+             self.visualizer = Visualizer(global_config['visualizer'], self.env)
+ 
+     def perform_task(self, instruction, rekep_program_dir=None, disturbance_seq=None):
++        """复位环境，生成或载入 ReKep 程序，然后执行完整任务。
++
++        Args:
++            instruction (str): 描述目标操作的自然语言指令。
++            rekep_program_dir (str | None): 已缓存约束程序目录；为 ``None`` 时
++                从当前相机观测生成新程序。
++            disturbance_seq (dict | None): 从阶段编号映射到扰动生成器工厂的字典。
++
++        Returns:
++            None: 任务直接在仿真环境中执行。
++        """
+         self.env.reset()
+         cam_obs = self.env.get_cam_obs()
+         rgb = cam_obs[self.config['vlm_camera']]['rgb']
+@@ -77,6 +97,15 @@
+         self._execute(rekep_program_dir, disturbance_seq)
+ 
+     def _update_disturbance_seq(self, stage, disturbance_seq):
++        """在指定阶段首次进入时安装对应的逐步扰动生成器。
++
++        Args:
++            stage (int): 当前阶段编号，从 1 开始。
++            disturbance_seq (dict | None): 阶段编号到扰动生成器工厂的映射。
++
++        Returns:
++            None: 环境扰动序列和已应用标志会被原地更新。
++        """
+         if disturbance_seq is not None:
+             if stage in disturbance_seq and not self.applied_disturbance[stage]:
+                 # set the disturbance sequence, the generator will yield and instantiate one disturbance function for each env.step until it is exhausted
+@@ -84,6 +113,15 @@
+                 self.applied_disturbance[stage] = True
+ 
+     def _execute(self, rekep_program_dir, disturbance_seq=None):
++        """加载约束程序并循环规划、执行、检查约束和切换任务阶段。
++
++        Args:
++            rekep_program_dir (str): 含元数据和各阶段约束文件的程序目录。
++            disturbance_seq (dict | None): 可选的阶段扰动生成器映射。
++
++        Returns:
++            None: 最后一阶段完成并保存视频后结束。
++        """
+         # load metadata
+         with open(os.path.join(rekep_program_dir, 'metadata.json'), 'r') as f:
+             self.program_info = json.load(f)
+@@ -182,6 +220,14 @@
+                     self._update_stage(self.stage + 1)
+ 
+     def _get_next_subgoal(self, from_scratch):
++        """根据当前阶段约束优化下一末端子目标姿态。
++
++        Args:
++            from_scratch (bool): 是否放弃上次解并执行全局初始化优化。
++
++        Returns:
++            np.ndarray: 七维世界坐标末端子目标姿态。
++        """
+         subgoal_constraints = self.constraint_fns[self.stage]['subgoal']
+         path_constraints = self.constraint_fns[self.stage]['path']
+         subgoal_pose, debug_dict = self.subgoal_solver.solve(self.curr_ee_pose,
+@@ -205,6 +251,15 @@
+         return subgoal_pose
+ 
+     def _get_next_path(self, next_subgoal, from_scratch):
++        """规划当前末端姿态到下一子目标的约束路径并进行稠密化。
++
++        Args:
++            next_subgoal (np.ndarray): 七维目标末端姿态。
++            from_scratch (bool): 是否从头初始化路径优化。
++
++        Returns:
++            np.ndarray: 每行包含七维末端姿态和夹爪保持动作的稠密路径。
++        """
+         path_constraints = self.constraint_fns[self.stage]['path']
+         path, debug_dict = self.path_solver.solve(self.curr_ee_pose,
+                                                     next_subgoal,
+@@ -222,6 +277,14 @@
+         return processed_path
+ 
+     def _process_path(self, path):
++        """在当前姿态与优化控制点之间进行样条插值并附加夹爪动作。
++
++        Args:
++            path (np.ndarray): 路径求解器输出的稀疏七维姿态控制点。
++
++        Returns:
++            np.ndarray: 形状为 ``(N, 8)`` 的稠密末端动作序列。
++        """
+         # spline interpolate the path from the current ee pose
+         full_control_points = np.concatenate([
+             self.curr_ee_pose.reshape(1, -1),
+@@ -238,6 +301,14 @@
+         return ee_action_seq
+ 
+     def _update_stage(self, stage):
++        """切换当前任务阶段并更新抓取、释放和关键点可移动状态。
++
++        Args:
++            stage (int): 要进入的阶段编号，从 1 开始。
++
++        Returns:
++            None: 当前阶段相关的内部状态会被重置。
++        """
+         # update stage
+         self.stage = stage
+         self.is_grasp_stage = self.program_info['grasp_keypoints'][self.stage - 1] != -1
+@@ -253,11 +324,21 @@
+         self.first_iter = True
+ 
+     def _update_keypoint_movable_mask(self):
++        """依据关键点所属物体是否被抓取，刷新优化中的可移动掩码。
++
++        Returns:
++            None: ``self.keypoint_movable_mask`` 会被原地更新。
++        """
+         for i in range(1, len(self.keypoint_movable_mask)):  # first keypoint is ee so always movable
+             keypoint_object = self.env.get_object_by_keypoint(i - 1)
+             self.keypoint_movable_mask[i] = self.env.is_grasping(keypoint_object)
+ 
+     def _execute_grasp_action(self):
++        """沿末端局部抓取轴前进设定深度，并在目标处闭合夹爪。
++
++        Returns:
++            None: 抓取动作直接发送给仿真环境。
++        """
+         pregrasp_pose = self.env.get_ee_pose()
+         grasp_pose = pregrasp_pose.copy()
+         grasp_pose[:3] += T.quat2mat(pregrasp_pose[3:]) @ np.array([self.config['grasp_depth'], 0, 0])
+@@ -265,6 +346,11 @@
+         self.env.execute_action(grasp_action, precise=True)
+     
+     def _execute_release_action(self):
++        """执行当前阶段的释放动作。
++
++        Returns:
++            None: 直接调用环境接口张开夹爪。
++        """
+         self.env.open_gripper()
+ 
+ if __name__ == "__main__":
+@@ -282,8 +368,13 @@
+     # = pen task disturbance sequence
+     # ====================================
+     def stage1_disturbance_seq(env):
+-        """
+-        Move the pen in stage 0 when robot is trying to grasp the pen
++        """在机器人尝试抓笔时生成移动和旋转笔的逐步扰动。
++
++        Args:
++            env (ReKepOGEnv): 要施加扰动的仿真环境。
++
++        Yields:
++            Callable[[int], None]: 当前仿真步应执行的扰动函数。
+         """
+         pen = env.og_env.scene.object_registry("name", "pen_1")
+         holder = env.og_env.scene.object_registry("name", "pencil_holder_1")
+@@ -299,6 +390,14 @@
+         control_points = np.array([pose0, pose1, pose2])
+         pose_seq = spline_interpolate_poses(control_points, num_steps=25)
+         def disturbance(counter):
++            """把笔移动到扰动轨迹的指定采样点。
++
++            Args:
++                counter (int): 扰动轨迹采样索引。
++
++            Returns:
++                None: 笔的仿真位姿可能被原地更新。
++            """
+             if counter < len(pose_seq):
+                 pose = pose_seq[counter]
+                 pos, orn = pose[:3], pose[3:]
+@@ -310,8 +409,13 @@
+             counter += 1
+     
+     def stage2_disturbance_seq(env):
+-        """
+-        Take the pen out of the gripper in stage 1 when robot is trying to reorient the pen
++        """在重定向阶段强制释放笔，并生成将笔移开的逐步扰动。
++
++        Args:
++            env (ReKepOGEnv): 要施加扰动的仿真环境。
++
++        Yields:
++            Callable[[int], None]: 当前仿真步应执行的扰动函数。
+         """
+         apply_disturbance = env.is_grasping()
+         pen = env.og_env.scene.object_registry("name", "pen_1")
+@@ -323,6 +427,14 @@
+         control_points = np.array([pose0, pose1])
+         pose_seq = spline_interpolate_poses(control_points, num_steps=25)
+         def disturbance(counter):
++            """按阶段计数强制松手，并把笔移动到扰动轨迹采样点。
++
++            Args:
++                counter (int): 扰动阶段和轨迹采样索引。
++
++            Returns:
++                None: 机器人抓取状态和笔位姿可能被原地更新。
++            """
+             if apply_disturbance:
+                 if counter < 20:
+                     if counter > 15:
+@@ -341,8 +453,13 @@
+             counter += 1
+     
+     def stage3_disturbance_seq(env):
+-        """
+-        Move the holder in stage 2 when robot is trying to drop the pen into the holder
++        """在放置阶段生成横向移动笔筒的逐步扰动。
++
++        Args:
++            env (ReKepOGEnv): 要施加扰动的仿真环境。
++
++        Yields:
++            Callable[[int], None]: 当前仿真步应执行的扰动函数。
+         """
+         pen = env.og_env.scene.object_registry("name", "pen_1")
+         holder = env.og_env.scene.object_registry("name", "pencil_holder_1")
+@@ -355,6 +472,14 @@
+         control_points = np.array([pose0, pose1])
+         pose_seq = spline_interpolate_poses(control_points, num_steps=5)
+         def disturbance(counter):
++            """把笔筒移动到扰动轨迹的指定采样点。
++
++            Args:
++                counter (int): 扰动轨迹采样索引。
++
++            Returns:
++                None: 笔筒的仿真位姿可能被原地更新。
++            """
+             if counter < len(pose_seq):
+                 pose = pose_seq[counter]
+                 pos, orn = pose[:3], pose[3:]
+@@ -379,4 +504,4 @@
+     main = Main(scene_file, visualize=args.visualize)
+     main.perform_task(instruction,
+                     rekep_program_dir=task['rekep_program_dir'] if args.use_cached_query else None,
+-                    disturbance_seq=task.get('disturbance_seq', None) if args.apply_disturbance else None)+                    disturbance_seq=task.get('disturbance_seq', None) if args.apply_disturbance else None)
+--- a/og_utils.py
++++ b/og_utils.py
+@@ -7,6 +7,15 @@
+     Defines the camera class
+     """
+     def __init__(self, og_env, config) -> None:        
++        """创建 OmniGibson 相机并缓存其内外参。
++
++        Args:
++            og_env: 相机所属的 OmniGibson 环境。
++            config (dict): 相机名称、分辨率、位置和姿态配置。
++
++        Returns:
++            None: 构造函数不返回值。
++        """
+         self.cam = insert_camera(name=config['name'], og_env=og_env, width=config['resolution'], height=config['resolution'])
+         self.cam.set_position_orientation(config['position'], config['orientation'])
+         self.intrinsics = get_cam_intrinsics(self.cam)
+@@ -15,6 +24,9 @@
+     def get_params(self):
+         """
+         Get the intrinsic and extrinsic parameters of the camera
++
++        Returns:
++            dict: 包含 ``intrinsics`` 和 ``extrinsics`` 矩阵的字典。
+         """
+         return {"intrinsics": self.intrinsics, "extrinsics": self.extrinsics}
+     
+@@ -23,6 +35,10 @@
+         Gets the image observation from the camera.
+         Assumes have rendered befor calling this function.
+         No semantic handling here for now.
++
++        Returns:
++            dict: 包含 RGB、线性深度、世界坐标点、语义分割及相机内外参
++            的观测字典。
+         """
+         obs = self.cam.get_obs()
+         ret = {}
+@@ -35,6 +51,17 @@
+         return ret
+ 
+ def insert_camera(name, og_env, width=480, height=480):
++    """创建、加载并初始化兼容不同 OmniGibson API 版本的视觉传感器。
++
++    Args:
++        name (str): 相机名称，同时用于构造场景 prim 路径。
++        og_env: 相机需要加载到的 OmniGibson 环境。
++        width (int): 输出图像宽度，单位为像素。
++        height (int): 输出图像高度，单位为像素。
++
++    Returns:
++        VisionSensor: 已初始化的 RGB-D 与语义分割相机。
++    """
+     try:
+         cam = VisionSensor(
+             prim_path=f"/World/{name}",
+@@ -60,10 +87,13 @@
+     return cam
+ 
+ def get_cam_intrinsics(cam):
+-    """
+-    Get the intrinsics matrix for a VisionSensor object
+-    ::param cam: VisionSensor object
+-    ::return intrinsics: 3x3 numpy array
++    """从 OmniGibson 视觉传感器参数计算针孔相机内参。
++
++    Args:
++        cam (VisionSensor): 仅支持方形输出图像的视觉传感器。
++
++    Returns:
++        np.ndarray: 形状为 ``(3, 3)`` 的相机内参矩阵。
+     """
+     img_width = cam.image_width
+     img_height = cam.image_height
+@@ -83,9 +113,27 @@
+     return intrinsics
+ 
+ def get_cam_extrinsics(cam):
++    """计算从世界坐标系到相机坐标系的外参矩阵。
++
++    Args:
++        cam (VisionSensor): OmniGibson 视觉传感器。
++
++    Returns:
++        np.ndarray: 形状为 ``(4, 4)`` 的世界到相机齐次变换矩阵。
++    """
+     return T.pose_inv(T.pose2mat(cam.get_position_orientation()))
+ 
+ def pixel_to_3d_points(depth_image, intrinsics, extrinsics):
++    """把深度图中的所有像素反投影为世界坐标三维点。
++
++    Args:
++        depth_image (np.ndarray): 形状为 ``(H, W)`` 的线性深度图。
++        intrinsics (np.ndarray): 形状为 ``(3, 3)`` 的相机内参矩阵。
++        extrinsics (np.ndarray): 形状为 ``(4, 4)`` 的世界到相机外参矩阵。
++
++    Returns:
++        np.ndarray: 形状为 ``(H, W, 3)`` 的世界坐标点图。
++    """
+     # Get the shape of the depth image
+     H, W = depth_image.shape
+ 
+@@ -131,10 +179,15 @@
+     return world_coordinates
+ 
+ def point_to_pixel(pt, intrinsics, extrinsics):
+-    """
+-    pt -- (N, 3) 3d points in world frame
+-    intrinsics -- (3, 3) intrinsics matrix
+-    extrinsics -- (4, 4) extrinsics matrix
++    """将世界坐标三维点投影到图像像素坐标。
++
++    Args:
++        pt (np.ndarray): 形状为 ``(N, 3)`` 的世界坐标点。
++        intrinsics (np.ndarray): 形状为 ``(3, 3)`` 的相机内参矩阵。
++        extrinsics (np.ndarray): 形状为 ``(4, 4)`` 的世界到相机外参矩阵。
++
++    Returns:
++        np.ndarray: 形状为 ``(N, 2)`` 的像素坐标。
+     """
+     pt_in_cam = extrinsics @ np.hstack((pt, np.ones((pt.shape[0], 1)))).T # (4, N)
+     # multiply y, z by -1
+@@ -144,4 +197,4 @@
+     pt_in_cam = intrinsics @ pt_in_cam
+     pt_in_cam /= pt_in_cam[2, :]
+ 
+-    return pt_in_cam[:2, :].T+    return pt_in_cam[:2, :].T
+--- a/path_solver.py
++++ b/path_solver.py
+@@ -34,6 +34,29 @@
+                 initial_joint_pos,
+                 reset_joint_pos,
+                 return_debug_dict=False):
++    """计算候选末端路径的碰撞、长度、可达性和约束总代价。
++
++    Args:
++        opt_vars (np.ndarray): 归一化到 ``[-1, 1]`` 的中间控制点变量。
++        og_bounds (np.ndarray): 各控制点位置和欧拉角的原始边界。
++        start_pose (np.ndarray): 六维起始位置/欧拉角姿态。
++        end_pose (np.ndarray): 六维目标位置/欧拉角姿态。
++        keypoints_centered (np.ndarray): 以起始末端为中心的关键点。
++        keypoint_movable_mask (np.ndarray): 会随末端运动的关键点布尔掩码。
++        path_constraints (list[Callable]): 在路径采样点计算违反量的约束函数。
++        sdf_func (Callable): 查询场景有符号距离的插值函数。
++        collision_points_centered (np.ndarray | None): 末端局部碰撞点。
++        opt_interpolate_pos_step_size (float): 代价评估的位置采样步长。
++        opt_interpolate_rot_step_size (float): 代价评估的旋转采样步长。
++        ik_solver (IKSolver): 用于评估控制点可达性的逆运动学求解器。
++        initial_joint_pos (np.ndarray | None): IK 初始关节位置。
++        reset_joint_pos (np.ndarray): 关节正则化参考位置。
++        return_debug_dict (bool): 是否同时返回各代价项调试信息。
++
++    Returns:
++        float | tuple[float, dict]: 默认返回标量总代价；请求调试信息时返回
++        ``(总代价, 调试字典)``。
++    """
+ 
+     debug_dict = {}
+     debug_dict['num_control_points'] = len(opt_vars) // 6
+@@ -123,6 +146,16 @@
+     """
+ 
+     def __init__(self, config, ik_solver, reset_joint_pos):
++        """初始化路径优化器并执行一次预热求解。
++
++        Args:
++            config (dict): 边界、采样、碰撞和优化器参数。
++            ik_solver (IKSolver): 路径控制点可达性评估器。
++            reset_joint_pos (np.ndarray): 关节正则化参考位置。
++
++        Returns:
++            None: 构造函数不返回值。
++        """
+         self.config = config
+         self.ik_solver = ik_solver
+         self.reset_joint_pos = reset_joint_pos
+@@ -131,6 +164,11 @@
+         self._warmup()
+ 
+     def _warmup(self):
++        """用合成数据运行一次求解，使 JIT 和优化依赖完成预热。
++
++        Returns:
++            None: 预热结果会被清除，不作为后续优化初值。
++        """
+         start_pose = np.array([0.0, 0.0, 0.3, 0, 0, 0, 1])
+         end_pose = np.array([0.0, 0.0, 0.0, 0, 0, 0, 1])
+         keypoints = np.random.rand(10, 3)
+@@ -142,6 +180,14 @@
+         self.last_opt_result = None
+ 
+     def _setup_sdf(self, sdf_voxels):
++        """把规则 SDF 体素网格封装为可查询的三线性插值函数。
++
++        Args:
++            sdf_voxels (np.ndarray): 覆盖配置工作空间的三维 SDF 网格。
++
++        Returns:
++            RegularGridInterpolator: 越界位置返回 0 的 SDF 查询函数。
++        """
+         # create callable sdf function with interpolation
+         x = np.linspace(self.config['bounds_min'][0], self.config['bounds_max'][0], sdf_voxels.shape[0])
+         y = np.linspace(self.config['bounds_min'][1], self.config['bounds_max'][1], sdf_voxels.shape[1])
+@@ -150,6 +196,17 @@
+         return sdf_func
+ 
+     def _check_opt_result(self, opt_result, path_quat, debug_dict, og_bounds):
++        """根据终止原因和路径约束违反量修正优化成功状态。
++
++        Args:
++            opt_result (scipy.optimize.OptimizeResult): 原始优化结果。
++            path_quat (np.ndarray): 优化后的七维姿态路径；当前实现保留未用。
++            debug_dict (dict): 包含 ``path_violation`` 的代价调试信息。
++            og_bounds (np.ndarray): 原始优化边界；当前实现保留未用。
++
++        Returns:
++            scipy.optimize.OptimizeResult: 原地补充状态和消息后的结果对象。
++        """
+         # accept the opt_result if it's only terminated due to iteration limit
+         if (not opt_result.success and ('maximum' in opt_result.message.lower() or 'iteration' in opt_result.message.lower() or 'not necessarily' in opt_result.message.lower())):
+             opt_result.success = True
+@@ -166,6 +223,17 @@
+         return opt_result
+ 
+     def _center_collision_points_and_keypoints(self, ee_pose, collision_points, keypoints, keypoint_movable_mask):
++        """把碰撞点和可移动关键点变换到当前末端局部坐标系。
++
++        Args:
++            ee_pose (np.ndarray): 六维位置/欧拉角末端姿态。
++            collision_points (np.ndarray): 世界坐标碰撞点。
++            keypoints (np.ndarray): 世界坐标关键点。
++            keypoint_movable_mask (np.ndarray): 可移动关键点掩码。
++
++        Returns:
++            tuple[np.ndarray, np.ndarray]: 局部坐标碰撞点和中心化关键点。
++        """
+         ee_pose_homo = T.pose2mat([ee_pose[:3], T.euler2quat(ee_pose[3:])])
+         centering_transform = np.linalg.inv(ee_pose_homo)
+         collision_points_centered = np.dot(collision_points, centering_transform[:3, :3].T) + centering_transform[:3, 3]
+@@ -182,21 +250,22 @@
+             collision_points,
+             initial_joint_pos,
+             from_scratch=False):
+-        """
+-        Args:
+-            - start_pose (np.ndarray): [7], [x, y, z, qx, qy, qz, qw]
+-            - end_pose (np.ndarray): [7], [x, y, z, qx, qy, qz, qw]
+-            - keypoints (np.ndarray): [num_keypoints, 3]
+-            - keypoint_movable_mask (bool): whether the keypoints are on the object being grasped
+-            - path_constraints (List[Callable]): path constraints
+-            - sdf_voxels (np.ndarray): [H, W, D]
+-            - collision_points (np.ndarray): [num_points, 3], point cloud of the object being grasped
+-            - initial_joint_pos (np.ndarray): [N] initial joint positions of the robot.
+-            - from_scratch (bool): whether to start from scratch
+-
+-        Returns:
+-            - opt_result (scipy.optimize.OptimizeResult): optimization opt_result
+-            - debug_dict (dict): debug information
++        """优化起始姿态到目标姿态之间的中间末端控制点。
++
++        Args:
++            start_pose (np.ndarray): 七维起始末端位置和 ``xyzw`` 四元数。
++            end_pose (np.ndarray): 七维目标末端位置和 ``xyzw`` 四元数。
++            keypoints (np.ndarray): 形状为 ``(K, 3)`` 的当前关键点。
++            keypoint_movable_mask (np.ndarray): 关键点是否位于被抓物体上的掩码。
++            path_constraints (list[Callable]): 路径约束函数。
++            sdf_voxels (np.ndarray): 形状为 ``(H, W, D)`` 的环境 SDF。
++            collision_points (np.ndarray): 被抓物体与末端的 ``(N, 3)`` 碰撞点。
++            initial_joint_pos (np.ndarray | None): IK 求解的初始关节位置。
++            from_scratch (bool): 是否使用全局优化重新初始化。
++
++        Returns:
++            tuple[np.ndarray, dict]: 七维姿态控制点路径，以及包含代价、状态和
++            求解耗时的调试字典。
+         """
+         # downsample collision points
+         if collision_points is not None and collision_points.shape[0] > self.config['max_collision_points']:
+@@ -317,4 +386,4 @@
+         # cache opt_result for future use if successful
+         if opt_result.success:
+             self.last_opt_result = copy.deepcopy(opt_result)
+-        return poses_quat, debug_dict+        return poses_quat, debug_dict
+--- a/subgoal_solver.py
++++ b/subgoal_solver.py
+@@ -26,6 +26,28 @@
+             reset_joint_pos,
+             is_grasp_stage,
+             return_debug_dict=False):
++    """计算候选子目标的碰撞、偏移、IK、抓取朝向及约束总代价。
++
++    Args:
++        opt_vars (np.ndarray): 归一化到 ``[-1, 1]`` 的六维候选姿态。
++        og_bounds (Sequence[tuple]): 位置和欧拉角变量的原始边界。
++        keypoints_centered (np.ndarray): 以当前末端为中心的关键点。
++        keypoint_movable_mask (np.ndarray): 会随末端运动的关键点布尔掩码。
++        goal_constraints (list[Callable]): 子目标约束函数列表。
++        path_constraints (list[Callable]): 当前阶段持续约束函数列表。
++        sdf_func (Callable): 查询场景有符号距离的插值函数。
++        collision_points_centered (np.ndarray | None): 末端局部碰撞点。
++        init_pose_homo (np.ndarray): 当前末端的 ``(4, 4)`` 齐次姿态。
++        ik_solver (IKSolver): 用于评估候选姿态可达性的 IK 求解器。
++        initial_joint_pos (np.ndarray | None): IK 初始关节位置。
++        reset_joint_pos (np.ndarray): 关节正则化参考位置。
++        is_grasp_stage (bool): 是否加入抓取接近方向代价。
++        return_debug_dict (bool): 是否同时返回各代价项调试信息。
++
++    Returns:
++        float | tuple[float, dict]: 默认返回标量总代价；请求调试信息时返回
++        ``(总代价, 调试字典)``。
++    """
+ 
+     debug_dict = {}
+     # unnormalize variables and do conversion
+@@ -114,6 +136,16 @@
+ 
+ class SubgoalSolver:
+     def __init__(self, config, ik_solver, reset_joint_pos):
++        """初始化子目标优化器并执行一次预热求解。
++
++        Args:
++            config (dict): 工作空间、碰撞、约束和优化器参数。
++            ik_solver (IKSolver): 候选姿态可达性评估器。
++            reset_joint_pos (np.ndarray): 关节正则化参考位置。
++
++        Returns:
++            None: 构造函数不返回值。
++        """
+         self.config = config
+         self.ik_solver = ik_solver
+         self.reset_joint_pos = reset_joint_pos
+@@ -122,6 +154,11 @@
+         self._warmup()
+ 
+     def _warmup(self):
++        """用合成数据运行一次求解，使 JIT 和优化依赖完成预热。
++
++        Returns:
++            None: 预热结果会被清除，不作为后续优化初值。
++        """
+         ee_pose = np.array([0.0, 0.0, 0.0, 0, 0, 0, 1])
+         keypoints = np.random.rand(10, 3)
+         keypoint_movable_mask = np.random.rand(10) > 0.5
+@@ -133,6 +170,14 @@
+         self.last_opt_result = None
+ 
+     def _setup_sdf(self, sdf_voxels):
++        """把规则 SDF 体素网格封装为可查询的三线性插值函数。
++
++        Args:
++            sdf_voxels (np.ndarray): 覆盖配置工作空间的三维 SDF 网格。
++
++        Returns:
++            RegularGridInterpolator: 越界位置返回 0 的 SDF 查询函数。
++        """
+         # create callable sdf function with interpolation
+         x = np.linspace(self.config['bounds_min'][0], self.config['bounds_max'][0], sdf_voxels.shape[0])
+         y = np.linspace(self.config['bounds_min'][1], self.config['bounds_max'][1], sdf_voxels.shape[1])
+@@ -141,6 +186,15 @@
+         return sdf_func
+ 
+     def _check_opt_result(self, opt_result, debug_dict):
++        """结合终止原因、约束违反量和 IK 可达性修正成功状态。
++
++        Args:
++            opt_result (scipy.optimize.OptimizeResult): 原始优化结果。
++            debug_dict (dict): 约束违反量和 IK 状态等调试信息。
++
++        Returns:
++            scipy.optimize.OptimizeResult: 原地补充状态和消息后的结果对象。
++        """
+         # accept the opt_result if it's only terminated due to iteration limit
+         if (not opt_result.success and ('maximum' in opt_result.message.lower() or 'iteration' in opt_result.message.lower() or 'not necessarily' in opt_result.message.lower())):
+             opt_result.success = True
+@@ -169,6 +223,17 @@
+         return opt_result
+     
+     def _center_collision_points_and_keypoints(self, ee_pose_homo, collision_points, keypoints, keypoint_movable_mask):
++        """把碰撞点和可移动关键点变换到当前末端局部坐标系。
++
++        Args:
++            ee_pose_homo (np.ndarray): 当前末端 ``(4, 4)`` 齐次姿态。
++            collision_points (np.ndarray): 世界坐标碰撞点。
++            keypoints (np.ndarray): 世界坐标关键点。
++            keypoint_movable_mask (np.ndarray): 可移动关键点掩码。
++
++        Returns:
++            tuple[np.ndarray, np.ndarray]: 局部坐标碰撞点和中心化关键点。
++        """
+         centering_transform = np.linalg.inv(ee_pose_homo)
+         collision_points_centered = np.dot(collision_points, centering_transform[:3, :3].T) + centering_transform[:3, 3]
+         keypoints_centered = transform_keypoints(centering_transform, keypoints, keypoint_movable_mask)
+@@ -186,21 +251,23 @@
+             initial_joint_pos,
+             from_scratch=False,
+             ):
+-        """
+-        Args:
+-            - ee_pose (np.ndarray): [7], [x, y, z, qx, qy, qz, qw] end effector pose.
+-            - keypoints (np.ndarray): [M, 3] keypoint positions.
+-            - keypoint_movable_mask (bool): [M] boolean array indicating whether the keypoint is on the grasped object.
+-            - goal_constraints (List[Callable]): subgoal constraint functions.
+-            - path_constraints (List[Callable]): path constraint functions.
+-            - sdf_voxels (np.ndarray): [X, Y, Z] signed distance field of the environment.
+-            - collision_points (np.ndarray): [N, 3] point cloud of the object.
+-            - is_grasp_stage (bool): whether the current stage is a grasp stage.
+-            - initial_joint_pos (np.ndarray): [N] initial joint positions of the robot.
+-            - from_scratch (bool): whether to start from scratch.
+-        Returns:
+-            - result (scipy.optimize.OptimizeResult): optimization result.
+-            - debug_dict (dict): debug information.
++        """在约束、碰撞和可达性代价下优化下一末端子目标姿态。
++
++        Args:
++            ee_pose (np.ndarray): 七维当前末端位置和 ``xyzw`` 四元数。
++            keypoints (np.ndarray): 形状为 ``(K, 3)`` 的当前关键点。
++            keypoint_movable_mask (np.ndarray): 关键点是否位于被抓物体上的掩码。
++            goal_constraints (list[Callable]): 当前阶段的子目标约束函数。
++            path_constraints (list[Callable]): 当前阶段持续生效的路径约束函数。
++            sdf_voxels (np.ndarray): 形状为 ``(X, Y, Z)`` 的环境 SDF。
++            collision_points (np.ndarray): 末端和被抓物体的 ``(N, 3)`` 碰撞点。
++            is_grasp_stage (bool): 当前阶段是否需要抓取。
++            initial_joint_pos (np.ndarray | None): IK 求解的初始关节位置。
++            from_scratch (bool): 是否使用全局优化重新初始化。
++
++        Returns:
++            tuple[np.ndarray, dict]: 七维子目标姿态，以及包含代价、状态和求解
++            耗时的调试字典。
+         """
+         # downsample collision points
+         if collision_points is not None and collision_points.shape[0] > self.config['max_collision_points']:
+@@ -291,4 +358,4 @@
+         # cache opt_result for future use if successful
+         if opt_result.success:
+             self.last_opt_result = copy.deepcopy(opt_result)
+-        return sol, debug_dict+        return sol, debug_dict
+--- a/transform_utils.py
++++ b/transform_utils.py
+@@ -123,6 +123,9 @@
+     Args:
+         q (np.array): a 4-dim array corresponding to a quaternion
+         to (str): either 'xyzw' or 'wxyz', determining which convention to convert to.
++
++    Returns:
++        np.ndarray: 重排为目标分量顺序的四元数。
+     """
+     if to == "xyzw":
+         return q[[1, 2, 3, 0]]
+@@ -315,6 +318,9 @@
+         angle_limit (None or float): If set, determines magnitude limit of angles to generate
+         random_state (None or RandomState): RNG to use if specified
+ 
++    Returns:
++        tuple[np.ndarray, float]: 随机单位旋转轴和 ``[0, angle_limit]`` 内的角度。
++
+     Raises:
+         AssertionError: [Invalid RNG]
+     """
+@@ -399,6 +405,9 @@
+     Args:
+         vec (3-array): (x,y,z) direction vector (possible non-normalized)
+         up (3-array): (x,y,z) direction vector representing the canonical up direction (possible non-normalized)
++
++    Returns:
++        np.ndarray: 使局部 x 轴对齐 ``vec`` 的 ``xyzw`` 四元数。
+     """
+     # See https://stackoverflow.com/questions/15873996/converting-a-direction-vector-to-a-quaternion-rotation
+     # Take cross product of @up and @vec to get @s_n, and then cross @vec and @s_n to get @u_n
+@@ -1017,6 +1026,9 @@
+     Args:
+         vec0 (np.array): (..., 3) (x,y,z) 3D vector, possibly unnormalized
+         vec1 (np.array): (..., 3) (x,y,z) 3D vector, possibly unnormalized
++
++    Returns:
++        np.ndarray: 从 ``vec0`` 旋转到 ``vec1`` 的轴角向量。
+     """
+     # Normalize vectors
+     vec0 = normalize(vec0, axis=-1)
+@@ -1035,6 +1047,9 @@
+         vec1 (np.array): (..., 3) (x,y,z) 3D vector, possibly unnormalized
+         normalized (bool): If True, @vec0 and @vec1 are assumed to already be normalized and we will skip the
+             normalization step (more efficient)
++
++    Returns:
++        np.ndarray: 从 ``vec0`` 旋转到 ``vec1`` 的归一化 ``xyzw`` 四元数。
+     """
+     # Normalize vectors if requested
+     if not normalized:
+@@ -1048,12 +1063,32 @@
+ 
+ 
+ def l2_distance(v1, v2):
+-    """Returns the L2 distance between vector v1 and v2."""
++    """计算两个向量之间的欧氏距离。
++
++    Args:
++        v1 (array-like): 第一个向量。
++        v2 (array-like): 第二个向量。
++
++    Returns:
++        float: 两向量之差的 L2 范数。
++    """
+     return np.linalg.norm(np.array(v1) - np.array(v2))
+ 
+ 
+ def frustum(left, right, bottom, top, znear, zfar):
+-    """Create view frustum matrix."""
++    """创建透视视锥投影矩阵。
++
++    Args:
++        left (float): 近裁剪面的左边界。
++        right (float): 近裁剪面的右边界。
++        bottom (float): 近裁剪面的下边界。
++        top (float): 近裁剪面的上边界。
++        znear (float): 近裁剪距离。
++        zfar (float): 远裁剪距离。
++
++    Returns:
++        np.ndarray: 形状为 ``(4, 4)`` 的视锥投影矩阵。
++    """
+     assert right != left
+     assert bottom != top
+     assert znear != zfar
+@@ -1072,7 +1107,19 @@
+ 
+ 
+ def ortho(left, right, bottom, top, znear, zfar):
+-    """Create orthonormal projection matrix."""
++    """创建正交投影矩阵。
++
++    Args:
++        left (float): 可视体左边界。
++        right (float): 可视体右边界。
++        bottom (float): 可视体下边界。
++        top (float): 可视体上边界。
++        znear (float): 近裁剪距离。
++        zfar (float): 远裁剪距离。
++
++    Returns:
++        np.ndarray: 形状为 ``(4, 4)`` 的正交投影矩阵。
++    """
+     assert right != left
+     assert bottom != top
+     assert znear != zfar
+@@ -1089,7 +1136,17 @@
+ 
+ 
+ def perspective(fovy, aspect, znear, zfar):
+-    """Create perspective projection matrix."""
++    """根据垂直视场角和宽高比创建透视投影矩阵。
++
++    Args:
++        fovy (float): 垂直视场角，单位为度。
++        aspect (float): 图像宽高比。
++        znear (float): 近裁剪距离。
++        zfar (float): 远裁剪距离。
++
++    Returns:
++        np.ndarray: 形状为 ``(4, 4)`` 的透视投影矩阵。
++    """
+     # fovy is in degree
+     assert znear != zfar
+     h = np.tan(fovy / 360.0 * np.pi) * znear
+@@ -1098,28 +1155,70 @@
+ 
+ 
+ def anorm(x, axis=None, keepdims=False):
+-    """Compute L2 norms alogn specified axes."""
++    """沿指定轴计算 L2 范数。
++
++    Args:
++        x (np.ndarray): 输入数组。
++        axis (int | tuple | None): 求范数的轴。
++        keepdims (bool): 是否保留被归约的维度。
++
++    Returns:
++        np.ndarray | float: 计算得到的 L2 范数。
++    """
+     return np.linalg.norm(x, axis=axis, keepdims=keepdims)
+ 
+ 
+ def normalize(v, axis=None, eps=1e-10):
+-    """L2 Normalize along specified axes."""
++    """沿指定轴做数值稳定的 L2 归一化。
++
++    Args:
++        v (np.ndarray): 输入向量或向量批次。
++        axis (int | tuple | None): 归一化轴。
++        eps (float): 防止除零的最小范数。
++
++    Returns:
++        np.ndarray: 与输入同形状的归一化数组。
++    """
+     norm = anorm(v, axis=axis, keepdims=True)
+     return v / np.where(norm < eps, eps, norm)
+ 
+ 
+ def cartesian_to_polar(x, y):
+-    """Convert cartesian coordinate to polar coordinate"""
++    """把二维笛卡尔坐标转换为极坐标。
++
++    Args:
++        x (float | np.ndarray): 横坐标。
++        y (float | np.ndarray): 纵坐标。
++
++    Returns:
++        tuple: 半径 ``rho`` 和方位角 ``phi``（弧度）。
++    """
+     rho = np.sqrt(x ** 2 + y ** 2)
+     phi = np.arctan2(y, x)
+     return rho, phi
+ 
+ 
+ def deg2rad(deg):
++    """将角度从度转换为弧度。
++
++    Args:
++        deg (float | np.ndarray): 以度为单位的角度。
++
++    Returns:
++        float | np.ndarray: 以弧度为单位的角度。
++    """
+     return deg * np.pi / 180.
+ 
+ 
+ def rad2deg(rad):
++    """将角度从弧度转换为度。
++
++    Args:
++        rad (float | np.ndarray): 以弧度为单位的角度。
++
++    Returns:
++        float | np.ndarray: 以度为单位的角度。
++    """
+     return rad * 180. / np.pi
+ 
+ 
+@@ -1141,13 +1240,27 @@
+ 
+ 
+ def z_angle_from_quat(quat):
+-    """Get the angle around the Z axis produced by the quaternion."""
++    """提取四元数作用于 x 轴后对应的平面偏航角。
++
++    Args:
++        quat (np.ndarray): ``xyzw`` 顺序的四元数。
++
++    Returns:
++        float: 绕 z 轴的角度，单位为弧度。
++    """
+     rotated_X_axis = R.from_quat(quat).apply([1, 0, 0])
+     return np.arctan2(rotated_X_axis[1], rotated_X_axis[0])
+ 
+ 
+ def z_rotation_from_quat(quat):
+-    """Get the quaternion for the rotation around the Z axis produced by the quaternion."""
++    """仅保留输入四元数的 z 轴旋转分量。
++
++    Args:
++        quat (np.ndarray): ``xyzw`` 顺序的输入四元数。
++
++    Returns:
++        np.ndarray: 只含偏航旋转的 ``xyzw`` 四元数。
++    """
+     return R.from_euler("z", z_angle_from_quat(quat)).as_quat()
+ 
+ 
+@@ -1287,4 +1400,4 @@
+     q0 *= np.sin((1.0 - fraction) * angle) * isin
+     q1 *= np.sin(fraction * angle) * isin
+     q0 += q1
+-    return q0+    return q0
+--- a/utils.py
++++ b/utils.py
+@@ -14,8 +14,14 @@
+ # = optimization utils
+ # ===============================================
+ def normalize_vars(vars, og_bounds):
+-    """
+-    Given 1D variables and bounds, normalize the variables to [-1, 1] range.
++    """按各维原始边界把一维变量线性归一化到 ``[-1, 1]``。
++
++    Args:
++        vars (np.ndarray): 待归一化的一维变量。
++        og_bounds (Sequence[tuple]): 每一维的 ``(最小值, 最大值)``。
++
++    Returns:
++        np.ndarray: 与输入同形状的归一化变量。
+     """
+     normalized_vars = np.empty_like(vars)
+     for i, (b_min, b_max) in enumerate(og_bounds):
+@@ -23,8 +29,14 @@
+     return normalized_vars
+ 
+ def unnormalize_vars(normalized_vars, og_bounds):
+-    """
+-    Given 1D variables in [-1, 1] and original bounds, denormalize the variables to the original range.
++    """把 ``[-1, 1]`` 内的一维变量线性还原到各维原始边界。
++
++    Args:
++        normalized_vars (np.ndarray): 归一化后的一维变量。
++        og_bounds (Sequence[tuple]): 每一维的 ``(最小值, 最大值)``。
++
++    Returns:
++        np.ndarray: 与输入同形状的原量纲变量。
+     """
+     vars = np.empty_like(normalized_vars)
+     for i, (b_min, b_max) in enumerate(og_bounds):
+@@ -32,6 +44,17 @@
+     return vars
+ 
+ def calculate_collision_cost(poses, sdf_func, collision_points, threshold):
++    """累计一组姿态下碰撞点侵入 SDF 安全阈值的代价。
++
++    Args:
++        poses (np.ndarray): 形状为 ``(M, 4, 4)`` 的末端变换序列。
++        sdf_func (Callable): 输入三维点并返回有符号距离的插值函数。
++        collision_points (np.ndarray): 末端局部坐标系中的 ``(N, 3)`` 碰撞点。
++        threshold (float): 加到 SDF 距离上的安全裕量。
++
++    Returns:
++        float: 所有正侵入量之和。
++    """
+     assert poses.shape[1:] == (4, 4)
+     transformed_pcs = batch_transform_points(collision_points, poses)
+     transformed_pcs_flatten = transformed_pcs.reshape(-1, 3)  # [num_poses * num_points, 3]
+@@ -43,6 +66,16 @@
+ 
+ @njit(cache=True, fastmath=True)
+ def consistency(poses_a, poses_b, rot_weight=0.5):
++    """计算姿态集 A 到姿态集 B 的平均最近邻位置/旋转距离。
++
++    Args:
++        poses_a (np.ndarray): 形状为 ``(N, 4, 4)`` 的姿态集。
++        poses_b (np.ndarray): 形状为 ``(M, 4, 4)`` 的参考姿态集。
++        rot_weight (float): 旋转角距离相对位置距离的权重。
++
++    Returns:
++        float: A 中每个姿态到 B 的最小加权距离的平均值。
++    """
+     assert poses_a.shape[1:] == (4, 4) and poses_b.shape[1:] == (4, 4), 'poses must be of shape (N, 4, 4)'
+     min_distances = np.zeros(len(poses_a), dtype=np.float64)
+     for i in range(len(poses_a)):
+@@ -58,6 +91,16 @@
+     return np.mean(min_distances)
+ 
+ def transform_keypoints(transform, keypoints, movable_mask):
++    """仅对可移动掩码选中的关键点应用齐次变换。
++
++    Args:
++        transform (np.ndarray): 形状为 ``(4, 4)`` 的齐次变换矩阵。
++        keypoints (np.ndarray): 形状为 ``(N, 3)`` 的关键点。
++        movable_mask (np.ndarray): 指示哪些关键点随末端移动的布尔掩码。
++
++    Returns:
++        np.ndarray: 变换可移动点后得到的关键点副本。
++    """
+     assert transform.shape == (4, 4)
+     transformed_keypoints = keypoints.copy()
+     if movable_mask.sum() > 0:
+@@ -83,6 +126,17 @@
+ 
+ @njit(cache=True, fastmath=True)
+ def get_samples_jitted(control_points_homo, control_points_quat, opt_interpolate_pos_step_size, opt_interpolate_rot_step_size):
++    """按位置和旋转步长在相邻控制点间生成稠密七维姿态样本。
++
++    Args:
++        control_points_homo (np.ndarray): ``(N, 4, 4)`` 齐次姿态控制点。
++        control_points_quat (np.ndarray): 对应的 ``(N, 7)`` 位置/四元数控制点。
++        opt_interpolate_pos_step_size (float): 最大位置采样步长。
++        opt_interpolate_rot_step_size (float): 最大旋转采样步长，单位为弧度。
++
++    Returns:
++        tuple[np.ndarray, int]: 稠密七维姿态序列及样本总数。
++    """
+     assert control_points_homo.shape[1:] == (4, 4)
+     # calculate number of samples per segment
+     num_samples_per_segment = np.empty(len(control_points_homo) - 1, dtype=np.int64)
+@@ -122,6 +176,14 @@
+ 
+ @njit(cache=True, fastmath=True)
+ def path_length(samples_homo):
++    """累计相邻齐次姿态之间的位置长度和旋转角长度。
++
++    Args:
++        samples_homo (np.ndarray): 形状为 ``(N, 4, 4)`` 的姿态序列。
++
++    Returns:
++        tuple[float, float]: 总位置路径长度和总旋转角长度。
++    """
+     assert samples_homo.shape[1:] == (4, 4), 'samples_homo must be of shape (N, 4, 4)'
+     pos_length = 0
+     rot_length = 0
+@@ -134,12 +196,36 @@
+ # = others
+ # ===============================================
+ def get_callable_grasping_cost_fn(env):
++    """为动态约束代码创建按关键点查询抓取代价的闭包。
++
++    Args:
++        env (ReKepOGEnv): 提供关键点对象映射和抓取状态的环境。
++
++    Returns:
++        Callable[[int], int]: 已抓取目标对象时返回 0，否则返回 1 的函数。
++    """
+     def get_grasping_cost(keypoint_idx):
++        """计算指定关键点所属对象的二值抓取代价。
++
++        Args:
++            keypoint_idx (int): 已注册关键点索引。
++
++        Returns:
++            int: 正在抓取该对象时为 0，否则为 1。
++        """
+         keypoint_object = env.get_object_by_keypoint(keypoint_idx)
+         return -env.is_grasping(candidate_obj=keypoint_object) + 1  # return 0 if grasping an object, 1 if not grasping any object
+     return get_grasping_cost
+ 
+ def get_config(config_path=None):
++    """从 YAML 文件加载全局配置。
++
++    Args:
++        config_path (str | None): 配置路径；为 ``None`` 时使用模块默认配置。
++
++    Returns:
++        dict: YAML 解析后的配置字典。
++    """
+     if config_path is None:
+         this_file_dir = os.path.dirname(os.path.abspath(__file__))
+         config_path = os.path.join(this_file_dir, 'configs/config.yaml')
+@@ -160,6 +246,14 @@
+     UNDERLINE = '\033[4m'
+ 
+ def get_clock_time(milliseconds=False):
++    """生成供日志使用的本地时钟字符串。
++
++    Args:
++        milliseconds (bool): 是否附加三位毫秒字段。
++
++    Returns:
++        str: ``时:分:秒`` 或 ``时:分:秒.毫秒`` 格式的字符串。
++    """
+     curr_time = datetime.datetime.now()
+     if milliseconds:
+         return f'{curr_time.hour}:{curr_time.minute}:{curr_time.second}.{curr_time.microsecond // 1000}'
+@@ -167,12 +261,28 @@
+         return f'{curr_time.hour}:{curr_time.minute}:{curr_time.second}'
+ 
+ def angle_between_quats(q1, q2):
+-    """Angle between two quaternions"""
++    """计算两个单位四元数所表示旋转之间的最小夹角。
++
++    Args:
++        q1 (np.ndarray): 第一个四元数。
++        q2 (np.ndarray): 第二个四元数。
++
++    Returns:
++        float: 两个旋转之间的角距离，单位为弧度。
++    """
+     return 2 * np.arccos(np.clip(np.abs(np.dot(q1, q2)), -1, 1))
+ 
+ def filter_points_by_bounds(points, bounds_min, bounds_max, strict=True):
+-    """
+-    Filter points by taking only points within workspace bounds.
++    """计算点是否位于工作空间轴对齐边界内的布尔掩码。
++
++    Args:
++        points (np.ndarray): 形状为 ``(N, 3)`` 的三维点。
++        bounds_min (np.ndarray): 三轴最小边界。
++        bounds_max (np.ndarray): 三轴最大边界。
++        strict (bool): 为假时按实现中的比例向外放宽边界。
++
++    Returns:
++        np.ndarray: 长度为 N 的边界内布尔掩码。
+     """
+     assert points.shape[1] == 3, "points must be (N, 3)"
+     bounds_min = bounds_min.copy()
+@@ -192,6 +302,14 @@
+     return within_bounds_mask
+ 
+ def print_opt_debug_dict(debug_dict):
++    """将优化调试字典按对齐格式输出到标准输出。
++
++    Args:
++        debug_dict (dict): 优化器代价、状态和耗时等调试信息。
++
++    Returns:
++        None: 内容直接打印到终端。
++    """
+     print('\n' + '#' * 40)
+     print(f'# Optimization debug info:')
+     max_key_length = max(len(str(k)) for k in debug_dict.keys())
+@@ -205,6 +323,14 @@
+     print('#' * 40 + '\n')
+ 
+ def merge_dicts(dicts):
++    """按输入顺序合并多个字典，后出现的同名键覆盖先前值。
++
++    Args:
++        dicts (Iterable[dict]): 待合并的字典序列。
++
++    Returns:
++        dict: 合并后的新字典。
++    """
+     return {
+         k : v 
+         for d in dicts
+@@ -212,6 +338,16 @@
+     }
+     
+ def exec_safe(code_str, gvars=None, lvars=None):
++    """在受限全局变量中执行不含导入和双下划线的约束代码。
++
++    Args:
++        code_str (str): 待执行的 Python 源码文本。
++        gvars (dict | None): 允许动态代码访问的额外全局变量。
++        lvars (dict | None): 接收动态定义结果的局部变量字典。
++
++    Returns:
++        None: 动态定义通过传入的 ``lvars`` 字典返回给调用方。
++    """
+     banned_phrases = ['import', '__']
+     for phrase in banned_phrases:
+         assert phrase not in code_str
+@@ -232,6 +368,15 @@
+         raise e
+ 
+ def load_functions_from_txt(txt_path, get_grasping_cost_fn):
++    """从文本文件加载视觉语言模型生成的约束函数。
++
++    Args:
++        txt_path (str | None): 约束源码文件路径；为 ``None`` 时返回空列表。
++        get_grasping_cost_fn (Callable): 暴露给约束代码的抓取代价函数。
++
++    Returns:
++        list[Callable]: 按动态执行后局部命名空间顺序收集的约束函数。
++    """
+     if txt_path is None:
+         return []
+     # load txt file
+@@ -248,6 +393,15 @@
+ 
+ @njit(cache=True, fastmath=True)
+ def angle_between_rotmat(P, Q):
++    """计算两个三维旋转矩阵之间的相对旋转角。
++
++    Args:
++        P (np.ndarray): 第一个 ``(3, 3)`` 旋转矩阵。
++        Q (np.ndarray): 第二个 ``(3, 3)`` 旋转矩阵。
++
++    Returns:
++        float: 相对旋转角，单位为弧度。
++    """
+     R = np.dot(P, Q.T)
+     cos_theta = (np.trace(R)-1)/2
+     if cos_theta > 1:
+@@ -257,12 +411,30 @@
+     return np.arccos(cos_theta)
+ 
+ def fit_b_spline(control_points):
++    """以最高三次、且不超过可用点数的阶数拟合无平滑 B 样条。
++
++    Args:
++        control_points (np.ndarray): 形状为 ``(N, D)`` 的位置控制点。
++
++    Returns:
++        tuple: SciPy ``splprep`` 返回的 ``(tck, u)`` 样条表示。
++    """
+     # determine appropriate k
+     k = min(3, control_points.shape[0]-1)
+     spline = interpolate.splprep(control_points.T, s=0, k=k)
+     return spline
+ 
+ def sample_from_spline(spline, num_samples):
++    """从位置 B 样条或旋转样条中均匀采样。
++
++    Args:
++        spline (tuple | RotationSpline): 待采样的位置或旋转样条。
++        num_samples (int): 采样数量。
++
++    Returns:
++        np.ndarray: 位置样条返回 ``(N, D)`` 点，旋转样条返回
++        ``(N, 3, 3)`` 旋转矩阵。
++    """
+     sample_points = np.linspace(0, 1, num_samples)
+     if isinstance(spline, RotationSpline):
+         samples = spline(sample_points).as_matrix()  # [num_samples, 3, 3]
+@@ -274,8 +446,15 @@
+     return samples
+ 
+ def linear_interpolate_poses(start_pose, end_pose, num_poses):
+-    """
+-    Interpolate between start and end pose.
++    """对位置做线性插值、对旋转做球面插值，生成两姿态间序列。
++
++    Args:
++        start_pose (np.ndarray): 六维欧拉、七维四元数或 ``(4, 4)`` 起始姿态。
++        end_pose (np.ndarray): 与起始姿态表示相同的目标姿态。
++        num_poses (int): 包含首尾姿态的输出数量，至少为 2。
++
++    Returns:
++        np.ndarray: 与输入姿态表示一致的插值序列。
+     """
+     assert num_poses >= 2, 'num_poses must be at least 2'
+     if start_pose.shape == (6,) and end_pose.shape == (6,):
+@@ -421,12 +600,17 @@
+     return num_path_poses
+ 
+ def farthest_point_sampling(pc, num_points):
+-    """
+-    Given a point cloud, sample num_points points that are the farthest apart.
+-    Use o3d farthest point sampling.
++    """使用 Open3D 最远点采样从点云中选择空间分散的子集。
++
++    Args:
++        pc (np.ndarray): 形状为 ``(N, 3)`` 的输入点云。
++        num_points (int): 期望保留的点数。
++
++    Returns:
++        np.ndarray: 形状为 ``(num_points, 3)`` 的降采样点云。
+     """
+     assert pc.ndim == 2 and pc.shape[1] == 3, "pc must be a (N, 3) numpy array"
+     pcd = o3d.geometry.PointCloud()
+     pcd.points = o3d.utility.Vector3dVector(pc)
+     downpcd_farthest = pcd.farthest_point_down_sample(num_points)
+-    return np.asarray(downpcd_farthest.points)+    return np.asarray(downpcd_farthest.points)
+--- a/visualizer.py
++++ b/visualizer.py
+@@ -6,6 +6,16 @@
+ from utils import filter_points_by_bounds, batch_transform_points
+ 
+ def add_to_visualize_buffer(visualize_buffer, visualize_points, visualize_colors):
++    """校验点与颜色数组，并将非空数据追加到可视化缓冲区。
++
++    Args:
++        visualize_buffer (dict): 含 ``points`` 和 ``colors`` 列表的缓冲区。
++        visualize_points (np.ndarray): 形状为 ``(N, 3)`` 的三维点。
++        visualize_colors (np.ndarray): 与点一一对应的 ``(N, 3)`` RGB 颜色。
++
++    Returns:
++        None: 传入的缓冲区会被原地更新。
++    """
+     assert visualize_points.shape[0] == visualize_colors.shape[0], f'got {visualize_points.shape[0]} for points and {visualize_colors.shape[0]} for colors'
+     if len(visualize_points) == 0:
+         return
+@@ -16,6 +26,17 @@
+     visualize_buffer["colors"].append(visualize_colors)
+ 
+ def generate_nearby_points(point, num_points_per_side=5, half_range=0.005):
++    """在单个或一组三维点周围生成规则立方体采样点。
++
++    Args:
++        point (np.ndarray): 形状为 ``(3,)`` 或 ``(N, 3)`` 的中心点。
++        num_points_per_side (int): 每个坐标轴方向的采样数。
++        half_range (float): 单点分支中采样立方体的半边长。
++
++    Returns:
++        np.ndarray: 单点输入时为 ``(num_points_per_side**3, 3)``；批量输入时
++        为 ``(N, num_points_per_side**3, 3)`` 的邻域点。
++    """
+     if point.ndim == 1:
+         offsets = np.linspace(-1, 1, num_points_per_side)
+         offsets_meshgrid = np.meshgrid(offsets, offsets, offsets)
+@@ -34,6 +55,15 @@
+ 
+ class Visualizer:
+     def __init__(self, config, env):
++        """初始化工作空间边界、显示坐标变换和渲染颜色。
++
++        Args:
++            config (dict): 可视化工作空间边界配置。
++            env (ReKepOGEnv): 提供场景观测、关键点和碰撞点的环境对象。
++
++        Returns:
++            None: 构造函数不返回值。
++        """
+         self.config = config
+         self.env = env
+         self.bounds_min = np.array(self.config['bounds_min'])
+@@ -47,12 +77,29 @@
+         ]).T
+ 
+     def show_img(self, rgb):
++        """以阻塞窗口显示 RGB 图像，等待用户按键后关闭。
++
++        Args:
++            rgb (np.ndarray): 形状为 ``(H, W, 3)`` 的 RGB 图像。
++
++        Returns:
++            None: 图像通过 OpenCV 窗口显示。
++        """
+         cv2.imshow('img', rgb[..., ::-1])
+         cv2.waitKey(0)
+         print('showing image, click on the window and press "ESC" to close and continue')
+         cv2.destroyAllWindows()
+     
+     def show_pointcloud(self, points, colors):
++        """变换点云到观察坐标系并使用 Open3D 阻塞显示。
++
++        Args:
++            points (np.ndarray): 形状为 ``(N, 3)`` 的世界坐标点。
++            colors (np.ndarray): 形状为 ``(N, 3)`` 的归一化 RGB 颜色。
++
++        Returns:
++            None: 点云通过 Open3D 窗口显示。
++        """
+         # transform to viewer frame
+         points = np.dot(points, self.world2viewer[:3, :3].T) + self.world2viewer[:3, 3]
+         # clip color to [0, 1]
+@@ -64,6 +111,12 @@
+         o3d.visualization.draw_geometries([pcd])
+ 
+     def _get_scene_points_and_colors(self):
++        """融合各相机观测，并裁剪出工作空间内的彩色场景点云。
++
++        Returns:
++            tuple[np.ndarray, np.ndarray]: 拼接后的 ``(N, 3)`` 场景点和对应
++            的归一化 RGB 颜色。
++        """
+         # scene
+         cam_obs = self.env.get_cam_obs()
+         scene_points = []
+@@ -82,6 +135,14 @@
+         return scene_points, scene_colors
+ 
+     def visualize_subgoal(self, subgoal_pose):
++        """显示场景、关键点及位于候选子目标姿态的末端碰撞几何。
++
++        Args:
++            subgoal_pose (np.ndarray): ``[x, y, z, qx, qy, qz, qw]`` 子目标姿态。
++
++        Returns:
++            None: 组合点云通过可视化窗口显示。
++        """
+         visualize_buffer = {
+             "points": [],
+             "colors": []
+@@ -116,6 +177,15 @@
+         self.show_pointcloud(visualize_points, visualize_colors)
+ 
+     def visualize_path(self, path):
++        """显示规划路径曲线和沿路径变换后的末端碰撞几何。
++
++        Args:
++            path (np.ndarray): 按时间排列的末端姿态序列；每行前七维为位置
++                和四元数，可带第八维夹爪动作。
++
++        Returns:
++            None: 组合点云通过可视化窗口显示。
++        """
+         visualize_buffer = {
+             "points": [],
+             "colors": []
+@@ -172,4 +242,4 @@
+         # visualize
+         visualize_points = np.concatenate(visualize_buffer["points"], axis=0)
+         visualize_colors = np.concatenate(visualize_buffer["colors"], axis=0)
+-        self.show_pointcloud(visualize_points, visualize_colors)+        self.show_pointcloud(visualize_points, visualize_colors)

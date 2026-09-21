@@ -1,0 +1,12 @@
+std_msgs/Header header
+string session_id
+string snapshot_id
+string program_sha256
+string program_directory
+uint32 num_stages
+int32[] grasp_keypoints
+int32[] release_keypoints
+bool schema_valid
+bool numerically_valid
+bool approved
+string status

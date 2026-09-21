@@ -1,0 +1,5 @@
+string session_id
+string program_sha256
+---
+bool success
+string status

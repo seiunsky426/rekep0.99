@@ -1,0 +1,15 @@
+schema_version: 1
+profile: paper_real
+approved: false
+official_commit: 63c43fdba60354980258beaeb8a7d48e088e1e3e
+# Evaluation-only starting point.  Autonomous rejects this file until the
+# deterministic replay/approval tools replace it with measured evidence.
+inputs: {}
+input_paths: {}
+constraint_tolerance: 0.0001
+weights:
+  subgoal_consistency: 1.0
+  path_consistency: 1.0
+  table_clearance: 1.0
+metrics: {}
+baseline_metrics: {}

@@ -1,0 +1,17 @@
+# This file must describe every rigid body attached to Piper before SAFE mapping.
+# Start closed until the current physical tool inventory is checked in person.
+operator_verified_complete: false
+verification_note: ""
+verification_date_utc: ""
+attachments: []
+
+# Supported declaration example (remove comments and measure every value):
+# attachments:
+#   - name: tool_fixture
+#     parent_link: link6
+#     type: box                 # box | cylinder | mesh
+#     size_m: [0.10, 0.04, 0.02]
+#     pose:
+#       translation_m: [0.0, 0.0, 0.05]
+#       quaternion_xyzw: [0.0, 0.0, 0.0, 1.0]
+#     measurement_method: caliper

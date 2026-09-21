@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rekpiper.local/schema/signed-artifact-v2.json",
+  "title": "ReKpiper signed acceptance artifact v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "artifact_type",
+    "artifact_id",
+    "payload",
+    "payload_sha256",
+    "evidence",
+    "approval"
+  ],
+  "properties": {
+    "schema_version": {"const": 2},
+    "artifact_type": {"type": "string", "minLength": 1},
+    "artifact_id": {"type": "string", "minLength": 1},
+    "payload": {"type": "object"},
+    "payload_sha256": {"$ref": "#/$defs/sha256"},
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["role", "path", "sha256"],
+        "properties": {
+          "role": {"type": "string", "minLength": 1},
+          "path": {"type": "string", "minLength": 1},
+          "sha256": {"$ref": "#/$defs/sha256"}
+        }
+      }
+    },
+    "approval": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operator", "approved_utc", "key_id", "algorithm",
+        "signature_ed25519_b64"
+      ],
+      "properties": {
+        "operator": {"type": "string", "minLength": 1},
+        "approved_utc": {"type": "string", "format": "date-time"},
+        "key_id": {"type": "string", "pattern": "^[0-9a-f]{16}$"},
+        "algorithm": {"const": "Ed25519"},
+        "signature_ed25519_b64": {"type": "string", "minLength": 1}
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

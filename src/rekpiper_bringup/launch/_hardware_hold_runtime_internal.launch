@@ -1,0 +1,55 @@
+<?xml version="1.0"?>
+<launch>
+  <!-- INTERNAL: no Cartesian command subscriber and no gripper action. -->
+  <arg name="guard_token"/>
+  <arg name="can_port"/>
+  <arg name="allow_hardware_commands"/>
+  <arg name="gripper_baseline"/>
+  <arg name="release_bundle"/>
+  <arg name="acceptance_public_key"/>
+  <arg name="minimum_release_counter"/>
+  <arg name="robot_id"/>
+
+  <node pkg="piper" type="piper_ctrl_single_node.py"
+        name="piper_driver" output="screen" required="true">
+    <param name="can_port" value="$(arg can_port)"/>
+    <param name="auto_enable" value="false"/>
+    <param name="gripper_exist" value="false"/>
+    <param name="hold_only" value="true"/>
+    <param name="hold_tolerance_rad" value="0.01"/>
+    <param name="armed_topic"
+           value="/rekpiper/execution/hardware_hold_armed"/>
+    <param name="authorized_joint_command_caller"
+           value="/piper_trajectory_bridge"/>
+    <param name="allow_cartesian_commands" value="false"/>
+    <param name="allow_go_zero_service" value="false"/>
+    <param name="release_bundle" value="$(arg release_bundle)"/>
+    <param name="acceptance_public_key" value="$(arg acceptance_public_key)"/>
+    <param name="minimum_release_counter" value="$(arg minimum_release_counter)"/>
+    <param name="robot_id" value="$(arg robot_id)"/>
+  </node>
+  <node pkg="rekpiper_execution" type="gripper_joint_state_adapter_node.py"
+        name="gripper_joint_state_adapter" output="screen" required="true">
+    <param name="input_topic" value="/joint_states_single"/>
+    <param name="output_topic" value="/joint_states"/>
+    <param name="maximum_opening_m" value="0.070"/>
+  </node>
+  <node pkg="rekpiper_execution" type="piper_trajectory_bridge_node.py"
+        name="piper_trajectory_bridge" output="screen" required="true">
+    <param name="allow_hardware_commands" value="true"/>
+    <param name="hold_only" value="true"/>
+    <param name="hold_tolerance_rad" value="0.01"/>
+    <param name="command_rate_hz" value="20.0"/>
+    <param name="armed_topic"
+           value="/rekpiper/execution/hardware_hold_armed"/>
+  </node>
+  <node pkg="rekpiper_execution" type="hardware_hold_stream_node.py"
+        name="hardware_hold_stream" output="screen" required="true">
+    <param name="release_bundle" value="$(arg release_bundle)"/>
+    <param name="acceptance_public_key" value="$(arg acceptance_public_key)"/>
+    <param name="minimum_release_counter" value="$(arg minimum_release_counter)"/>
+    <param name="robot_id" value="$(arg robot_id)"/>
+    <param name="armed_topic"
+           value="/rekpiper/execution/hardware_hold_armed"/>
+  </node>
+</launch>

@@ -1,0 +1,17 @@
+schema_version: 1
+frame_id: base_link
+status: UNVERIFIED
+source: historical_bounds_pending_rs1_rs3_validation
+precision_operation_allowed: false
+# Historical bounds only. Re-measure or validate for rs1/rs3 in M2/M3.
+
+# Robust 1%..99% XY extent of the measured red ROI, expanded outward by 0.10 m.
+xy_margin_m: 0.10
+workspace_bounds_min: [-0.1498985052, -0.4477905691, -0.0939019950]
+workspace_bounds_max: [0.7409938335, 0.5108430743, 0.6060980050]
+
+# Combined tabletop median. The lower Z bound is exactly table_height - 0.10 m.
+table_height_m: 0.0060980050
+below_table_allowance_m: 0.10
+max_height_above_table_m: 0.60
+

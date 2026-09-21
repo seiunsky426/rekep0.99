@@ -1,0 +1,23 @@
+# Relocation-safe install spaces contain the deployed third_party tree.  A
+# devel space does not; there the authoritative tree remains the workspace
+# containing CMake's source space.
+if [ -d "${CATKIN_ENV_HOOK_WORKSPACE}/third_party/ReKep" ]; then
+  _REKPIPER_HOOK_ROOT="${CATKIN_ENV_HOOK_WORKSPACE}"
+else
+  _REKPIPER_HOOK_ROOT="@REKPIPER_SOURCE_ROOT@"
+fi
+export REKPIPER_ROOT="${REKPIPER_ROOT:-${_REKPIPER_HOOK_ROOT}}"
+export REKPIPER_RUNTIME_ROOT="${REKPIPER_RUNTIME_ROOT:-${REKPIPER_ROOT}/runtime}"
+export REKEP_OFFICIAL_ROOT="${REKEP_OFFICIAL_ROOT:-${REKPIPER_ROOT}/third_party/ReKep}"
+if [ -d "${REKPIPER_ROOT}/share/rekpiper_bringup/config" ]; then
+  _REKPIPER_HOOK_CONFIG="${REKPIPER_ROOT}/share/rekpiper_bringup/config"
+else
+  _REKPIPER_HOOK_CONFIG="${REKPIPER_ROOT}/src/rekpiper_bringup/config"
+fi
+export REKPIPER_CONFIG_ROOT="${REKPIPER_CONFIG_ROOT:-${_REKPIPER_HOOK_CONFIG}}"
+export REKPIPER_SITE_CONFIG_ROOT="${REKPIPER_SITE_CONFIG_ROOT:-${REKPIPER_RUNTIME_ROOT}/site-config}"
+export REKPIPER_TRUST_ROOT="${REKPIPER_TRUST_ROOT:-${REKPIPER_RUNTIME_ROOT}/trust}"
+export REKPIPER_MODEL_ROOT="${REKPIPER_MODEL_ROOT:-${REKPIPER_RUNTIME_ROOT}/models}"
+export REKPIPER_VENDOR_ROOT="${REKPIPER_VENDOR_ROOT:-${REKPIPER_RUNTIME_ROOT}/vendor}"
+export REKPIPER_DATA_ROOT="${REKPIPER_DATA_ROOT:-${REKPIPER_RUNTIME_ROOT}/data}"
+unset _REKPIPER_HOOK_ROOT _REKPIPER_HOOK_CONFIG

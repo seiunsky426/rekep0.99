@@ -1,0 +1,24 @@
+<launch>
+  <arg name="preview_data" doc="Absolute path to PREVIEW_ONLY M8 npz"/>
+  <arg name="start_rviz" default="true"/>
+  <arg name="robot_description_file" default="$(find piper_description)/urdf/piper_description.urdf"/>
+  <group ns="m8_preview">
+    <param name="robot_description"
+           textfile="$(arg robot_description_file)"/>
+    <node pkg="rekpiper_planning" type="m8_offline_preview_node.py"
+          name="playback" output="screen" required="true">
+      <param name="preview_data" value="$(arg preview_data)"/>
+    </node>
+    <node pkg="robot_state_publisher" type="robot_state_publisher"
+          name="robot_state_publisher">
+      <remap from="joint_states" to="playback/joint_states"/>
+      <remap from="/tf" to="/m8_preview/tf"/>
+      <remap from="/tf_static" to="/m8_preview/tf_static"/>
+    </node>
+    <node if="$(arg start_rviz)" pkg="rviz" type="rviz" name="rviz"
+          args="-d $(find rekpiper_planning)/config/m8_offline_preview.rviz">
+      <remap from="/tf" to="/m8_preview/tf"/>
+      <remap from="/tf_static" to="/m8_preview/tf_static"/>
+    </node>
+  </group>
+</launch>

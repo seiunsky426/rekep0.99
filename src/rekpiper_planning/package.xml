@@ -1,0 +1,39 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>rekpiper_planning</name>
+  <version>0.1.0</version>
+  <description>Adapters and regression harness for the official ReKep numerical core.</description>
+  <maintainer email="zhengsihze@example.com">zhengsihze</maintainer>
+  <license>Proprietary</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+  <depend>ompl</depend>
+  <depend>moveit_core</depend>
+  <depend>moveit_ros_planning</depend>
+  <depend>cv_bridge</depend>
+  <depend>geometry_msgs</depend>
+  <depend>rekpiper_msgs</depend>
+  <depend>rekpiper_acceptance</depend>
+  <depend>roslaunch</depend>
+  <depend>rospy</depend>
+  <depend>sensor_msgs</depend>
+  <depend>std_msgs</depend>
+  <depend>tf2_ros</depend>
+  <depend>trajectory_msgs</depend>
+  <depend>visualization_msgs</depend>
+  <exec_depend>python3-numpy</exec_depend>
+  <exec_depend>python3-opencv</exec_depend>
+  <exec_depend>python3-requests</exec_depend>
+  <exec_depend>python3-scipy</exec_depend>
+  <exec_depend>python3-rospkg</exec_depend>
+  <exec_depend>python3-yaml</exec_depend>
+  <exec_depend>piper_description</exec_depend>
+  <exec_depend>robot_state_publisher</exec_depend>
+  <exec_depend>rviz</exec_depend>
+  <!-- numba, open3d and trimesh are pinned in the root Python lock because
+       Ubuntu 20.04/ROS Noetic does not provide compatible rosdep packages. -->
+  <exec_depend>urdfdom_py</exec_depend>
+  <test_depend>piper_description</test_depend>
+
+  <export/>
+</package>

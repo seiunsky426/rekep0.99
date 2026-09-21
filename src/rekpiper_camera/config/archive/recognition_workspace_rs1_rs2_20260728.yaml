@@ -1,0 +1,23 @@
+schema_version: 1
+frame_id: base_link
+status: MEASURED
+source: operator_red_table_roi_dual_d435
+measured_at: "2026-07-28"
+
+# Robust 1%..99% XY extent of the measured red ROI, expanded outward by 0.10 m.
+xy_margin_m: 0.10
+workspace_bounds_min: [-0.1498985052, -0.4477905691, -0.0939019950]
+workspace_bounds_max: [0.7409938335, 0.5108430743, 0.6060980050]
+
+# Combined tabletop median. The lower Z bound is exactly table_height - 0.10 m.
+table_height_m: 0.0060980050
+below_table_allowance_m: 0.10
+max_height_above_table_m: 0.60
+
+measurement:
+  rs1_table_z_median_m: 0.0088298097
+  rs2_table_z_median_m: -0.0139598213
+  rs1_table_band_points: 94116
+  rs2_table_band_points: 16885
+  cross_camera_stamp_delta_s: 0.059659
+  precision_operation_allowed: false

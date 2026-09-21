@@ -1,0 +1,5 @@
+<launch>
+  <!-- Display existing live feedback only. No robot/camera driver or playback. -->
+  <node pkg="rviz" type="rviz" name="piper_manual_teaching_view" output="screen"
+        args="-d $(find rekpiper_calibration)/config/manual_teaching.rviz"/>
+</launch>

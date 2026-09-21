@@ -1,0 +1,14 @@
+uint32 id
+std_msgs/Header header
+string name
+geometry_msgs/Point position
+float32 confidence
+float64[9] covariance
+uint32 valid_depth_pixels
+uint32 rigid_group_id
+uint32 pixel_x
+uint32 pixel_y
+string source
+bool outside_workspace
+bool in_workspace
+bool valid

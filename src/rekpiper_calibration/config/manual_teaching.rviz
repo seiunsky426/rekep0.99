@@ -1,0 +1,59 @@
+Panels:
+  - Class: rviz/Displays
+    Name: Displays
+Visualization Manager:
+  Class: ""
+  Global Options:
+    Fixed Frame: base_link
+    Background Color: 40; 40; 40
+  Displays:
+    - Class: rviz/Grid
+      Name: Grid 10cm
+      Enabled: true
+      Cell Size: 0.1
+    - Class: rviz/RobotModel
+      Name: Live Piper
+      Enabled: true
+      Robot Description: /robot_description
+      Visual Enabled: true
+      Collision Enabled: false
+      Alpha: 1.0
+    - Class: rviz/Axes
+      Name: link6 XYZ
+      Enabled: true
+      Reference Frame: link6
+      Length: 0.10
+      Radius: 0.005
+    - Class: rviz/Axes
+      Name: base_link XYZ
+      Enabled: true
+      Reference Frame: base_link
+      Length: 0.15
+      Radius: 0.005
+    - Class: rviz/Image
+      Name: rs1 marker detection
+      Enabled: true
+      Image Topic: /dual_aruco18_capture/rs1/annotated_image
+      Transport Hint: raw
+      Queue Size: 2
+      Normalize Range: true
+    - Class: rviz/Image
+      Name: rs3 marker detection
+      Enabled: true
+      Image Topic: /dual_aruco18_capture/rs3/annotated_image
+      Transport Hint: raw
+      Queue Size: 2
+      Normalize Range: true
+  Views:
+    Current:
+      Class: rviz/Orbit
+      Distance: 1.3
+      Pitch: 0.5
+      Yaw: 0.7
+      Focal Point:
+        X: 0.2
+        Y: 0.0
+        Z: 0.2
+Window Geometry:
+  Width: 1500
+  Height: 900

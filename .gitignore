@@ -1,0 +1,60 @@
+# Catkin and generated build products
+/build/
+/devel/
+/install/
+/logs/
+/.catkin_tools/
+
+# Site-specific runtime, models, data and trust material
+/runtime/
+/data/
+/models/
+/vendor/
+/site-config/
+/trust/
+
+# Python caches and local environments
+**/__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.venv/
+venv/
+
+# ROS recordings and generated calibration/runtime evidence
+*.bag
+*.bag.active
+*.db3
+*.npz
+*.npy
+*.jsonl
+calibration_dataset*
+calibration_report*
+release_bundle*.yaml
+hardware_acceptance_bundle*.yaml
+
+# Model and licensed binary assets
+*.pth
+*.pt
+*.onnx
+*.engine
+*.plan
+*.tar
+
+# Keys, credentials and local environment files
+*.pem
+*.key
+*.private_key
+*.public_key
+.env
+.env.*
+
+# Editors and operating-system files
+/.vscode/
+/.idea/
+/.agents/
+/.codex/
+.DS_Store
+*~
+*.swp

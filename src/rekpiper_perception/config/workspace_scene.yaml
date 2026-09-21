@@ -1,0 +1,46 @@
+# Measured workspace bounds must replace these nulls before a perception result
+# is allowed to command motion.
+workspace_bounds_min: null
+workspace_bounds_max: null
+
+scene:
+  sam_model_path: ""
+  sam_model_type: vit_h
+  sam_use_float16: true
+  min_valid_pixels: 150
+  minimum_confidence: 0.70
+  min_area_px: 150
+  max_area_ratio: 0.50
+  # Reject support surfaces/background instances that dominate the measured workspace.
+  max_workspace_mask_ratio: 0.30
+  max_masks: 64
+  pred_iou_thresh: 0.88
+  stability_score_thresh: 0.95
+  points_per_side: 32
+  # VLM-only 2-D cleanup: largest SAM component plus a small closing kernel.
+  visual_closing_px: 5
+  # Conservative 3-D mask cleanup used by DINOv2 and geometry estimates.
+  geometry_erosion_px: 3
+
+keypoint_proposer:
+  num_candidates_per_mask: 5
+  # Preserve nearby but distinct candidates.
+  min_dist_bt_keypoints: 0.08
+  max_mask_ratio: 0.50
+  mean_shift_jobs: 1
+  seed: 0
+
+# Lightweight RGB-D monitoring used only after candidates have been locked.
+scene_monitor:
+  rate_hz: 2.0
+  width: 160
+  height: 120
+  depth_change_m: 0.04
+  depth_change_ratio: 0.05
+  rgb_change_level: 35.0
+  rgb_change_ratio: 0.15
+  change_frames: 3
+  stable_depth_change_m: 0.02
+  stable_depth_change_ratio: 0.01
+  stable_rgb_mean_difference: 8.0
+  stable_frames: 5

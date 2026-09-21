@@ -1,0 +1,5 @@
+string object_uuid
+---
+bool success
+uint8 state
+string message

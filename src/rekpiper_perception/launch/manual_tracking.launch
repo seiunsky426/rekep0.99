@@ -1,0 +1,51 @@
+<?xml version="1.0"?>
+<launch>
+  <!-- Observation-only M5. Gripper, attachment and mapping run separately. -->
+  <arg name="minimum_snapshot_stamp_s"/>
+  <arg name="model_root" default="$(env REKPIPER_MODEL_ROOT)"/>
+  <arg name="vendor_root" default="$(env REKPIPER_VENDOR_ROOT)"/>
+  <arg name="seed_bounds_min" default="[0.27, -0.25, -0.08]"/>
+  <arg name="seed_bounds_max" default="[0.75, 0.45, 0.20]"/>
+
+  <node pkg="rekpiper_perception" type="object_registry_node.py"
+        name="object_registry" output="screen" required="true">
+    <rosparam param="camera_names">[rs1]</rosparam>
+    <param name="maximum_active_objects" value="16"/>
+    <param name="maximum_track_age_s" value="0.6"/>
+    <param name="initialization_timeout_s" value="30"/>
+    <param name="visual_lifecycle_only" value="true"/>
+  </node>
+  <node pkg="rekpiper_perception" type="multicamera_object_tracker_node.py"
+        name="multicamera_object_tracker" output="screen" required="true">
+    <rosparam param="camera_names">[rs1]</rosparam>
+    <rosparam command="load" file="$(find rekpiper_perception)/config/cutie_runtime.yaml"/>
+    <param name="cutie_source_root" value="$(arg vendor_root)/Cutie"/>
+    <param name="cutie_weights_path" value="$(arg model_root)/cutie-base-mega.pth"/>
+    <param name="dinov2_repo_path" value="$(arg vendor_root)/dinov2"/>
+    <param name="dinov2_weights_path" value="$(arg model_root)/dinov2_vits14_reg4_pretrain.pth"/>
+    <param name="maximum_frame_age_s" value="0.4"/>
+  </node>
+  <node pkg="rekpiper_perception" type="dual_dino_tracker_node.py"
+        name="dual_dino_tracker" output="screen" required="true">
+    <rosparam param="camera_names">[rs1]</rosparam>
+    <param name="dinov2_repo" value="$(arg vendor_root)/dinov2"/>
+    <param name="dinov2_weights" value="$(arg model_root)/dinov2_vits14_reg4_pretrain.pth"/>
+    <param name="freeze_snapshot" value="true"/>
+    <param name="minimum_snapshot_stamp_s" value="$(arg minimum_snapshot_stamp_s)"/>
+    <rosparam param="seed_bounds_min" subst_value="true">$(arg seed_bounds_min)</rosparam>
+    <rosparam param="seed_bounds_max" subst_value="true">$(arg seed_bounds_max)</rosparam>
+    <param name="use_object_masks" value="true"/>
+    <param name="rate_hz" value="10.0"/>
+    <param name="maximum_frame_age_s" value="0.6"/>
+    <param name="smoothing_window" value="3"/>
+    <param name="lost_after_frames" value="3"/>
+  </node>
+  <node pkg="rekpiper_perception" type="snapshot_object_registrar_node.py"
+        name="snapshot_object_registrar" output="screen" required="true">
+    <param name="freeze_snapshot" value="true"/>
+    <param name="minimum_snapshot_stamp_s" value="$(arg minimum_snapshot_stamp_s)"/>
+    <param name="rebuild_map" value="false"/>
+    <rosparam param="seed_bounds_min" subst_value="true">$(arg seed_bounds_min)</rosparam>
+    <rosparam param="seed_bounds_max" subst_value="true">$(arg seed_bounds_max)</rosparam>
+  </node>
+</launch>

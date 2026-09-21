@@ -1,0 +1,12 @@
+string source_camera
+string display_name
+uint32 rigid_group_id
+bool excluded_from_static_map
+sensor_msgs/Image seed_mask
+sensor_msgs/RegionOfInterest roi
+geometry_msgs/Point32[] positive_pixels
+geometry_msgs/Point32[] negative_pixels
+---
+bool success
+string object_uuid
+string message

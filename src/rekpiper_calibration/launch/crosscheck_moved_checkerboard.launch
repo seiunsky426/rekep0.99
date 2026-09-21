@@ -1,0 +1,49 @@
+<?xml version="1.0"?>
+<launch>
+  <!-- Read-only validation after the board has moved.  No base->camera TF is published. -->
+  <arg name="checkerboard_config" default="$(find rekpiper_calibration)/config/fixed_checkerboard_camera.yaml"/>
+  <arg name="rs1_extrinsics" default="$(find rekpiper_camera)/config/active_fixed_camera_extrinsics/rs1_extrinsics.yaml"/>
+  <arg name="rs3_extrinsics" default="$(find rekpiper_camera)/config/active_fixed_camera_extrinsics/rs3_extrinsics.yaml"/>
+  <arg name="serial_rs1" default="346522071783"/>
+  <arg name="serial_rs3" default="934222070377"/>
+  <arg name="width" default="640"/>
+  <arg name="height" default="360"/>
+  <arg name="fps" default="30"/>
+  <arg name="start_cameras" default="true"/>
+  <arg name="allow_missing_orientation_marker_for_depth_crosscheck" default="false"/>
+
+  <group if="$(arg start_cameras)">
+    <include file="$(find rekpiper_camera)/launch/d435_rgbd.launch">
+      <arg name="camera" value="rs1"/>
+      <arg name="serial_no" value="$(arg serial_rs1)"/>
+      <arg name="width" value="$(arg width)"/>
+      <arg name="height" value="$(arg height)"/>
+      <arg name="fps" value="$(arg fps)"/>
+      <arg name="initial_reset" value="false"/>
+    </include>
+    <include file="$(find rekpiper_camera)/launch/d435_rgbd.launch">
+      <arg name="camera" value="rs3"/>
+      <arg name="serial_no" value="$(arg serial_rs3)"/>
+      <arg name="width" value="$(arg width)"/>
+      <arg name="height" value="$(arg height)"/>
+      <arg name="fps" value="$(arg fps)"/>
+      <arg name="initial_reset" value="false"/>
+    </include>
+  </group>
+
+  <node pkg="rekpiper_calibration" type="moved_checkerboard_crosscheck_node.py"
+        name="moved_checkerboard_crosscheck" output="screen" required="true">
+    <param name="checkerboard_config" value="$(arg checkerboard_config)" type="str"/>
+    <param name="rs1_extrinsics" value="$(arg rs1_extrinsics)" type="str"/>
+    <param name="rs3_extrinsics" value="$(arg rs3_extrinsics)" type="str"/>
+    <param name="pair_max_skew_s" value="0.10"/>
+    <param name="median_limit_m" value="0.005"/>
+    <param name="p95_limit_m" value="0.008"/>
+    <param name="depth_scale_m" value="0.001"/>
+    <param name="depth_patch_radius_px" value="4"/>
+    <param name="minimum_valid_depth_corners" value="80"/>
+    <param name="allow_missing_orientation_marker_for_depth_crosscheck"
+           value="$(arg allow_missing_orientation_marker_for_depth_crosscheck)"/>
+  </node>
+
+</launch>

@@ -1,0 +1,7 @@
+<launch>
+  <arg name="waypoints" doc="Existing operator teaching waypoints.yaml"/>
+  <node pkg="rekpiper_calibration" type="manual_teaching_recorder_node.py"
+        name="manual_teaching_recorder" output="screen" required="true">
+    <param name="waypoints" value="$(arg waypoints)"/>
+  </node>
+</launch>

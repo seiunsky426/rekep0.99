@@ -1,0 +1,34 @@
+Panels:
+  - Class: rviz/Displays
+    Name: Displays
+Visualization Manager:
+  Class: ""
+  Global Options:
+    Fixed Frame: base_link
+    Background Color: 40; 40; 40
+  Displays:
+    - Class: rviz/Grid
+      Name: Grid
+      Enabled: true
+      Cell Size: 0.1
+    - Class: rviz/RobotModel
+      Name: Preview robot
+      Enabled: true
+      Robot Description: /calibration_preview/robot_description
+      Visual Enabled: true
+      Collision Enabled: false
+      Alpha: 0.7
+    - Class: rviz/MarkerArray
+      Name: Candidate path and pose numbers
+      Enabled: true
+      Marker Topic: /calibration_preview/playback/markers
+  Views:
+    Current:
+      Class: rviz/Orbit
+      Distance: 1.7
+      Pitch: 0.5
+      Yaw: 0.7
+      Focal Point:
+        X: 0.2
+        Y: 0.0
+        Z: 0.2

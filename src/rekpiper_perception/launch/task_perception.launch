@@ -1,0 +1,39 @@
+<?xml version="1.0"?>
+<launch>
+  <!-- ReKep paper-v2 SAM scene segmentation and DINOv2 ViT-S/14 reg4 proposals. -->
+  <arg name="workspace_bounds_min"/>
+  <arg name="workspace_bounds_max"/>
+  <arg name="model_root" default="$(env REKPIPER_MODEL_ROOT)"/>
+  <arg name="model_path" default="$(arg model_root)/sam_vit_h_4b8939.pth"/>
+  <arg name="config" default="$(find rekpiper_perception)/config/workspace_scene.yaml"/>
+  <arg name="official_root" default="$(env REKEP_OFFICIAL_ROOT)"/>
+  <arg name="vendor_root" default="$(env REKPIPER_VENDOR_ROOT)"/>
+  <arg name="dinov2_repo" default="$(arg vendor_root)/dinov2"/>
+  <arg name="dinov2_weights" default="$(arg model_root)/dinov2_vits14_reg4_pretrain.pth"/>
+  <arg name="base_frame" default="base_link"/>
+  <arg name="rgb_topic" default="/camera/color/image_raw"/>
+  <arg name="points_topic" default="/rgbd_projection/points_base"/>
+  <arg name="sync_slop_s" default="0.05"/>
+  <arg name="sync_queue_size" default="5"/>
+  <arg name="wait_for_task_trigger" default="false"/>
+
+  <node pkg="rekpiper_perception" type="task_perception_node.py"
+        ns="/rekpiper" name="perception" output="screen" required="true">
+    <rosparam command="load" file="$(arg config)"/>
+    <rosparam subst_value="true">
+      workspace_bounds_min: $(arg workspace_bounds_min)
+      workspace_bounds_max: $(arg workspace_bounds_max)
+    </rosparam>
+    <param name="scene/sam_model_path" value="$(arg model_path)"/>
+    <param name="device" value="cuda"/>
+    <param name="keypoint_proposer/official_root" value="$(arg official_root)"/>
+    <param name="keypoint_proposer/dinov2_repo" value="$(arg dinov2_repo)"/>
+    <param name="keypoint_proposer/dinov2_weights" value="$(arg dinov2_weights)"/>
+    <param name="base_frame" value="$(arg base_frame)"/>
+    <param name="rgb_topic" value="$(arg rgb_topic)"/>
+    <param name="points_topic" value="$(arg points_topic)"/>
+    <param name="sync_slop_s" value="$(arg sync_slop_s)"/>
+    <param name="sync_queue_size" value="$(arg sync_queue_size)"/>
+    <param name="wait_for_task_trigger" value="$(arg wait_for_task_trigger)"/>
+  </node>
+</launch>

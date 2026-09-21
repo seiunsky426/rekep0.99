@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>rekpiper_grasp</name>
+  <version>0.1.0</version>
+  <description>Task-directed AnyGrasp perception and read-only safety review.</description>
+  <maintainer email="zhengsihze@example.com">zhengsihze</maintainer>
+  <license>Proprietary</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+  <depend>cv_bridge</depend>
+  <depend>geometry_msgs</depend>
+  <depend>message_filters</depend>
+  <depend>rekpiper_planning</depend>
+  <depend>rekpiper_msgs</depend>
+  <depend>rekpiper_perception</depend>
+  <depend>rospy</depend>
+  <depend>sensor_msgs</depend>
+  <depend>std_msgs</depend>
+  <depend>tf2_ros</depend>
+  <exec_depend>python3-numpy</exec_depend>
+  <exec_depend>python3-opencv</exec_depend>
+  <exec_depend>python3-scipy</exec_depend>
+  <exec_depend>python3-yaml</exec_depend>
+  <export/>
+</package>

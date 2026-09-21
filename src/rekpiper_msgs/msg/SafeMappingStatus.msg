@@ -1,0 +1,20 @@
+uint8 DIRTY=0
+uint8 WAITING_FOR_INPUTS=1
+uint8 CLEARING=2
+uint8 WARMUP=3
+uint8 BUILDING=4
+uint8 VALIDATING=5
+uint8 READY=6
+uint8 PAUSED_UNSAFE=7
+
+std_msgs/Header header
+uint8 state
+string state_name
+string map_generation_uuid
+string configuration_hash
+bool map_query_allowed
+bool planning_safe
+uint32 rs1_valid_frames
+uint32 rs3_valid_frames
+uint32 esdf_updates
+string reason

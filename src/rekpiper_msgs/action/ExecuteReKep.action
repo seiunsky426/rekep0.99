@@ -1,0 +1,15 @@
+string session_id
+string program_sha256
+---
+bool success
+string status
+string audit_directory
+uint32 completed_stages
+uint32 backtrack_count
+---
+uint32 stage_index
+uint64 tick
+string phase
+float32 planning_rate_hz
+float32 planning_latency_s
+string reason

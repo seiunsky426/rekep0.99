@@ -1,0 +1,13 @@
+cameras:
+  - name: rs1
+    camera_frame: rs1_color_optical_frame
+    depth_topic: /rs1/aligned_depth_to_color/image_raw
+    camera_info_topic: /rs1/color/camera_info
+    robot_mask_topic: /rekpiper/mapping/rs1/robot_mask
+    dynamic_mask_topic: /rekpiper/objects/rs1/dynamic_mask
+  - name: rs3
+    camera_frame: rs3_color_optical_frame
+    depth_topic: /rs3/aligned_depth_to_color/image_raw
+    camera_info_topic: /rs3/color/camera_info
+    robot_mask_topic: /rekpiper/mapping/rs3/robot_mask
+    dynamic_mask_topic: /rekpiper/objects/rs3/dynamic_mask

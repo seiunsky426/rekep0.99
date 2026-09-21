@@ -1,0 +1,18 @@
+schema_version: 1
+status: UNCALIBRATED
+publish_tf_allowed: false
+precision_operation_allowed: false
+base_absolute_accuracy: UNVERIFIED
+logical_name: rs3
+serial: '934222070377'
+role: fixed_eye_to_hand
+parent_frame: base_link
+child_frame: rs3_link
+base_T_link:
+  - [1.0, 0.0, 0.0, 0.0]
+  - [0.0, 1.0, 0.0, 0.0]
+  - [0.0, 0.0, 1.0, 0.0]
+  - [0.0, 0.0, 0.0, 1.0]
+translation_m: {x: 0.0, y: 0.0, z: 0.0}
+rotation_xyzw: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}
+validation_report: ''

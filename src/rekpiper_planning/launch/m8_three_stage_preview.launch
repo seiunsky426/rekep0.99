@@ -1,0 +1,22 @@
+<launch>
+  <arg name="evidence_directory"/>
+  <arg name="start_rviz" default="true"/>
+  <arg name="planning_directory" default="planning"/>
+  <group ns="m8_offline">
+    <param name="robot_description" textfile="$(arg evidence_directory)/robot_description.urdf"/>
+    <node pkg="rekpiper_planning" type="m8_three_stage_preview_node.py" name="preview" output="screen" required="true">
+      <param name="evidence_directory" value="$(arg evidence_directory)"/>
+      <param name="planning_directory" value="$(arg planning_directory)"/>
+    </node>
+    <node pkg="robot_state_publisher" type="robot_state_publisher" name="robot_state_publisher">
+      <remap from="joint_states" to="preview/joint_states"/>
+      <remap from="/tf" to="/m8_offline/tf"/>
+      <remap from="/tf_static" to="/m8_offline/tf_static"/>
+    </node>
+    <node if="$(arg start_rviz)" pkg="rviz" type="rviz" name="rviz"
+          args="-d $(find rekpiper_planning)/config/m8_three_stage_preview.rviz">
+      <remap from="/tf" to="/m8_offline/tf"/>
+      <remap from="/tf_static" to="/m8_offline/tf_static"/>
+    </node>
+  </group>
+</launch>

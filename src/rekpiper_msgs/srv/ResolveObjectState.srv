@@ -1,0 +1,6 @@
+string object_uuid
+uint8 resolved_state
+string operator_note
+---
+bool success
+string message

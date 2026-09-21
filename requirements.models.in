@@ -1,0 +1,17 @@
+# Python support for the pinned runtime/vendor sources. Model weights and
+# native vendor binaries are inventoried separately in the local vendor lock.
+-c requirements.lock
+-c requirements.platform.lock
+einops==0.8.1
+kmeans-pytorch==0.3
+omegaconf==2.3.0
+yourdfpy==0.0.56
+warp-lang==1.2.1
+numpy-quaternion==2023.0.4
+scikit-image==0.21.0
+transforms3d==0.4.2
+grasp-nms==1.0.2
+Cython==0.29.37
+pybind11==2.13.6
+setuptools-scm==8.1.0
+cmake==3.27.9
