@@ -1,0 +1,42 @@
+Visualization Manager:
+  Global Options:
+    Fixed Frame: base_link
+    Background Color: 32; 36; 43
+    Frame Rate: 30
+  Displays:
+    - Class: rviz/Grid
+      Name: Grid
+      Enabled: true
+      Cell Size: 0.1
+      Plane Cell Count: 10
+    - Class: rviz/PointCloud2
+      Name: Blue cube RS1
+      Enabled: true
+      Topic: /rekpiper/supervised/blue_review/rs1
+      Color Transformer: RGB8
+      Position Transformer: XYZ
+      Size (m): 0.005
+      Style: Points
+    - Class: rviz/PointCloud2
+      Name: Blue cube RS3
+      Enabled: true
+      Topic: /rekpiper/supervised/blue_review/rs3
+      Color Transformer: RGB8
+      Position Transformer: XYZ
+      Size (m): 0.005
+      Style: Points
+    - Class: rviz/InteractiveMarkers
+      Name: Drag blue masks vertically
+      Enabled: true
+      Update Topic: /rekpiper/supervised/blue_review/drag/update
+    - Class: rviz/MarkerArray
+      Name: RS3 AnyGrasp representative pose
+      Enabled: true
+      Marker Topic: /rekpiper/supervised/blue_review/anygrasp_markers
+  Views:
+    Current:
+      Class: rviz/Orbit
+      Distance: 0.65
+      Focal Point: {X: 0.42, Y: 0.13, Z: 0.06}
+      Pitch: 0.7
+      Yaw: 0.8

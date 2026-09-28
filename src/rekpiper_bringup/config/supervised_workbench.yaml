@@ -1,0 +1,27 @@
+can_port: can0
+session_root: ${REKPIPER_ROOT}/runtime/supervised
+# These two source YAMLs are experimental inputs for planning-only preview.
+# RS1 defines the tabletop; both RS1 and RS3 points remain collision obstacles.
+# Their PENDING_REVIEW / precision_operation_allowed flags remain unchanged.
+extrinsics_status: EXPERIMENTAL_PREVIEW_ONLY
+rs1_extrinsics: ${REKPIPER_ROOT}/runtime/evidence/dual_base_20260921_rs3_update/runtime_sources/rs1_handeye.yaml
+stereo_extrinsics: ${REKPIPER_ROOT}/runtime/evidence/dual_base_20260921_rs3_update/runtime_sources/stereo_result.yaml
+# Explicit installation hypothesis for preview; independent known-point checks
+# in this session must verify the composed base_link transforms before motion.
+base_link_T_arm_base:
+  - [1, 0, 0, 0]
+  - [0, 1, 0, 0]
+  - [0, 0, 1, 0]
+  - [0, 0, 0, 1]
+serials: {rs1: '346522071783', rs3: '934222070377'}
+bounds_min: [-0.20, -0.60, -0.07]
+bounds_max: [0.80, 0.60, 0.80]
+voxel_m: 0.01
+minimum_clearance_m: 0.01
+pregrasp_distance_m: 0.06
+lift_m: 0.10
+
+# Retain the denser control-point spacing with the official path objective.
+path_solver:
+  opt_pos_step_size: 0.10
+  opt_rot_step_size: 0.2617993877991494  # 15 degrees

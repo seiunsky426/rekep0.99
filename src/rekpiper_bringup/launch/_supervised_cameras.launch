@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<launch>
+  <arg name="serial_rs1"/>
+  <arg name="serial_rs3"/>
+  <include file="$(find rekpiper_camera)/launch/d435_rgbd.launch">
+    <arg name="camera" value="rs1"/><arg name="serial_no" value="$(arg serial_rs1)"/>
+    <arg name="initial_reset" value="false"/><arg name="height" value="360"/>
+  </include>
+  <include file="$(find rekpiper_camera)/launch/d435_rgbd.launch">
+    <arg name="camera" value="rs3"/><arg name="serial_no" value="$(arg serial_rs3)"/>
+    <arg name="initial_reset" value="false"/><arg name="height" value="360"/>
+  </include>
+</launch>

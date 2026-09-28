@@ -1,0 +1,59 @@
+Panels:
+  - Class: rviz/Displays
+    Name: Displays
+  - Class: rviz/Views
+    Name: Views
+Window Geometry:
+  Width: 1500
+  Height: 920
+Visualization Manager:
+  Class: ""
+  Global Options:
+    Fixed Frame: base_link
+    Background Color: 28; 30; 36
+    Frame Rate: 30
+  Displays:
+    - Class: rviz/Grid
+      Name: Grid (metres)
+      Enabled: true
+      Cell Size: 0.1
+    - Class: rviz/RobotModel
+      Name: IK preview robot
+      Enabled: true
+      Robot Description: /path_solver_preview/robot_description
+      Visual Enabled: true
+      Collision Enabled: false
+      Alpha: 0.75
+    - Class: rviz/MarkerArray
+      Name: Controls, spline, sparse poses and cost trends
+      Enabled: true
+      Marker Topic: /path_solver_preview/inspector/markers
+    - Class: rviz/InteractiveMarkers
+      Name: One-click IK and draggable EE target
+      Enabled: true
+      Update Topic: /path_solver_preview/inspector/interactive/update
+      Show Axes: true
+      Show Descriptions: true
+      Show Visual Aids: true
+    - Class: rviz/PoseArray
+      Name: ALL dense poses (optional)
+      Enabled: false
+      Topic: /path_solver_preview/inspector/all_poses
+      Shape: Axes
+      Axes Length: 0.02
+      Axes Radius: 0.001
+  Tools:
+    - Class: rviz/Interact
+      Hide Inactive Objects: false
+    - Class: rviz/MoveCamera
+    - Class: rviz/Select
+  Views:
+    Current:
+      Class: rviz/Orbit
+      Distance: 1.8
+      Pitch: 0.50
+      Yaw: 0.85
+      Focal Point:
+        X: 0.35
+        Y: 0.0
+        Z: 0.30

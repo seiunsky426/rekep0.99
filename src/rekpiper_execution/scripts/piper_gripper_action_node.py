@@ -37,32 +37,40 @@ class PiperGripperAction:
         self._timeout = float(rospy.get_param("~feedback_timeout_s", 0.25))
         self._service = rospy.get_param("~gripper_service", "/gripper_srv")
         self._stop_service = rospy.get_param("~stop_service", "/stop_srv")
-        try:
-            self._release = validate_release_bundle(
-                str(rospy.get_param("~release_bundle", "")),
-                str(rospy.get_param("~acceptance_public_key", "")),
-                str(rospy.get_param("~minimum_release_counter", "")),
-                expected_robot_id=str(rospy.get_param(
-                    "~robot_id", "piper-rekpiper")))
-            self._baseline = self._release[
-                "verified_artifacts"]["gripper_baseline"]["payload"]
-        except (AcceptanceError, KeyError, TypeError, ValueError) as exc:
-            raise rospy.ROSInitException(
-                "signed gripper baseline rejected: {}".format(exc))
-        self._baseline_ready = bool(self._baseline.get("calibrated", False))
-        self._evidence_mode = str(self._baseline.get(
-            "contact_evidence_mode", "encoder_effort_vision"))
-        if self._evidence_mode not in (
-                "encoder_effort_vision", "encoder_visual"):
-            raise rospy.ROSInitException("invalid contact_evidence_mode")
+        self._supervised = None
+        if rospy.get_param('~execution_profile', 'autonomous') == 'supervised':
+            from rekpiper_execution.supervised_authority import RosLease
+            self._supervised = RosLease()
+            self._baseline = {}
+            self._baseline_ready = False
+            self._evidence_mode = 'operator_confirmation'
+        else:
+            try:
+                self._release = validate_release_bundle(
+                    str(rospy.get_param("~release_bundle", "")),
+                    str(rospy.get_param("~acceptance_public_key", "")),
+                    str(rospy.get_param("~minimum_release_counter", "")),
+                    expected_robot_id=str(rospy.get_param(
+                        "~robot_id", "piper-rekpiper")))
+                self._baseline = self._release[
+                    "verified_artifacts"]["gripper_baseline"]["payload"]
+            except (AcceptanceError, KeyError, TypeError, ValueError) as exc:
+                raise rospy.ROSInitException(
+                    "signed gripper baseline rejected: {}".format(exc))
+            self._baseline_ready = bool(self._baseline.get("calibrated", False))
+            self._evidence_mode = str(self._baseline.get(
+                "contact_evidence_mode", "encoder_effort_vision"))
+            if self._evidence_mode not in (
+                    "encoder_effort_vision", "encoder_visual"):
+                raise rospy.ROSInitException("invalid contact_evidence_mode")
         rospy.Subscriber("/joint_states_single", JointState,
                          self._joint_cb, queue_size=20)
         rospy.Subscriber("/arm_status", PiperStatusMsg,
                          self._arm_cb, queue_size=10)
-        rospy.Subscriber("/rekpiper/execution/hardware_armed", Bool,
+        rospy.Subscriber(rospy.get_param("~armed_topic", "/rekpiper/execution/hardware_armed"), Bool,
                          self._armed_cb, queue_size=2)
         self._server = actionlib.SimpleActionServer(
-            "/rekpiper/execution/command_gripper", CommandGripperAction,
+            rospy.get_param("~action_name", "/rekpiper/execution/command_gripper"), CommandGripperAction,
             execute_cb=self._execute, auto_start=False)
         self._server.start()
 
@@ -99,13 +107,19 @@ class PiperGripperAction:
             now = time.monotonic()
             if not self._allow:
                 return False, "hardware_commands_disabled"
-            try:
-                assert_release_unchanged(self._release)
-            except AcceptanceError as exc:
-                self._armed = False
-                return False, "signed_release_changed:" + str(exc)
-            if not self._baseline_ready:
-                return False, "calibrated_gripper_baseline_required"
+            if getattr(self, '_supervised', None):
+                try:
+                    self._supervised.check('gripper')
+                except ValueError as exc:
+                    return False, str(exc)
+            else:
+                try:
+                    assert_release_unchanged(self._release)
+                except AcceptanceError as exc:
+                    self._armed = False
+                    return False, "signed_release_changed:" + str(exc)
+                if not self._baseline_ready:
+                    return False, "calibrated_gripper_baseline_required"
             if not self._armed:
                 return False, "execution_not_armed"
             if not self._arm_ok or now - self._arm_time > self._timeout:
@@ -162,6 +176,12 @@ class PiperGripperAction:
             self._abort(reason)
             return
         try:
+            if self._supervised:
+                lease = self._supervised.check('gripper')
+                if (int(goal.command) != lease['gripper_command']
+                        or abs(goal.total_opening_m-lease['gripper_width']) > 1e-9
+                        or not 0 < goal.effort <= .5):
+                    raise RuntimeError('gripper_goal_not_authorized')
             rospy.wait_for_service(self._service, timeout=1.0)
             if goal.command == goal.OPEN:
                 target = float(goal.total_opening_m)
@@ -190,6 +210,25 @@ class PiperGripperAction:
                 raise RuntimeError("close_width_out_of_range")
             with self._lock:
                 start = self._opening
+            if self._supervised:
+                self._command(max(0., width-.003), min(.5, goal.effort))
+                deadline = time.monotonic()+3.
+                while time.monotonic() < deadline:
+                    if self._server.is_preempt_requested():
+                        raise InterruptedError()
+                    healthy, reason = self._health()
+                    if not healthy:
+                        raise RuntimeError(reason)
+                    self._feedback('CLOSED_WAITING_OPERATOR')
+                    rospy.sleep(.02)
+                with self._lock:
+                    final_opening = self._opening
+                if not (final_opening is not None and
+                        (final_opening < start-.002 or abs(final_opening-width) <= .003)):
+                    raise RuntimeError('gripper_close_no_measured_response')
+                self._server.set_succeeded(self._result(
+                    True, False, 'close_feedback_received_operator_confirmation_required'))
+                return
             commands = stepped_close_targets(start, width)
             detector = ContactDetector()
             index, commanded = 0, start

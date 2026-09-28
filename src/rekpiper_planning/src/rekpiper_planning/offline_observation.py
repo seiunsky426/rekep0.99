@@ -32,15 +32,16 @@ def rgbd_points(frame):
 
 
 def build_depth_collision_grid(frames, bounds_min, bounds_max, resolution_m,
-                               vacated_masks=None):
+                               vacated_masks=None, table_model=None,
+                               table_masks=None):
     """Fuse visible free space; unknown/occluded voxels remain blocked.
 
     Vacated masks explicitly identify hypothetical removed robot/object
     surfaces. Only the observed surface band is vacated, never the unseen
     volume behind it. Another view's static surface takes precedence.
     """
-    if set(frames) != {'rs1', 'rs3'}:
-        raise ValueError('both_camera_frames_required')
+    if set(frames) not in ({'rs1'}, {'rs1', 'rs3'}):
+        raise ValueError('rs1_camera_frame_required')
     stamps = [float(f[k]) for f in frames.values() for k in ('rgb_stamp_s', 'depth_stamp_s')]
     if not np.isfinite(stamps).all() or max(stamps)-min(stamps) > .025:
         raise ValueError('snapshot_camera_timestamps_inconsistent')
@@ -56,6 +57,12 @@ def build_depth_collision_grid(frames, bounds_min, bounds_max, resolution_m,
     occupied = free.copy()
     vacated = free.copy()
     band = np.sqrt(3.)*resolution/2
+    table_height = None
+    if table_model is not None:
+        from .table_surface import plane_parameters, inside_table_footprint
+        normal, offset = plane_parameters(table_model)
+        table_height = coordinates @ normal+offset
+        table_inside = inside_table_footprint(coordinates, table_model)
     for name, frame in frames.items():
         rgbd_points(frame)  # Validate units, intrinsics and rigid transform.
         depth = depth_metres(frame)
@@ -80,9 +87,24 @@ def build_depth_collision_grid(frames, bounds_min, bounds_max, resolution_m,
             if mask.shape != depth.shape:
                 raise ValueError('vacated_mask_shape_mismatch')
             removed = mask[v[indices], u[indices]]
+        if table_model is not None and table_masks is not None:
+            table_mask = np.asarray(table_masks[name], dtype=bool)
+            if table_mask.shape != depth.shape:
+                raise ValueError('table_mask_shape_mismatch')
+            on_table = table_mask[v[indices], u[indices]] & table_inside[indices] & ~removed
+            # A confirmed planar pixel uses the same zero crossing as the
+            # collision mesh, rather than a second thick noisy surface band.
+            heights = table_height[indices[on_table]]
+            surface[on_table] = ((heights <= 0)
+                                 & (heights >= -float(table_model.get('thickness_m', .1))))
+            free[indices[on_table & (table_height[indices] > 0)]] = True
         free[indices[delta > band]] = True
         occupied[indices[surface & ~removed]] = True
         vacated[indices[surface & removed]] = True
+    if table_model is not None:
+        # The finite, measured table slab is known solid. Never clear any
+        # unobserved volume above it or beyond its support polygon.
+        occupied |= table_inside & (table_height <= 0) & (table_height >= -float(table_model.get('thickness_m', .1)))
     known = free | occupied | vacated
     free = (free | vacated) & ~occupied
     free = free.reshape(tuple(shape))
@@ -92,7 +114,11 @@ def build_depth_collision_grid(frames, bounds_min, bounds_max, resolution_m,
     distances[occupied] = distance_transform_edt(occupied, sampling=resolution)[occupied]
     known = known.reshape(tuple(shape))
     distances[~known] = 1.0
-    return dict(bounds_min=lower, bounds_max=upper, resolution_m=resolution,
+    result = dict(bounds_min=lower, bounds_max=upper, resolution_m=resolution,
                 distances_m=distances.astype(np.float32), observed=known,
                 occupied=occupied, assumed_vacated=vacated.reshape(tuple(shape)) & ~occupied,
                 snapshot_stamp_s=min(stamps), motion_allowed=False)
+    if table_model is not None:
+        result.update(table_plane_normal=normal, table_plane_offset_m=offset,
+                      table_footprint_xy_m=np.asarray(table_model['table_footprint_xy_m']))
+    return result

@@ -13,9 +13,13 @@
   <arg name="base_frame" default="base_link"/>
   <arg name="rgb_topic" default="/camera/color/image_raw"/>
   <arg name="points_topic" default="/rgbd_projection/points_base"/>
+  <arg name="rs3_rgb_topic" default=""/>
+  <arg name="rs3_points_topic" default=""/>
   <arg name="sync_slop_s" default="0.05"/>
   <arg name="sync_queue_size" default="5"/>
   <arg name="wait_for_task_trigger" default="false"/>
+  <arg name="snapshot_output" default=""/>
+  <arg name="hold_snapshot_until_next_request" default="false"/>
 
   <node pkg="rekpiper_perception" type="task_perception_node.py"
         ns="/rekpiper" name="perception" output="screen" required="true">
@@ -32,8 +36,12 @@
     <param name="base_frame" value="$(arg base_frame)"/>
     <param name="rgb_topic" value="$(arg rgb_topic)"/>
     <param name="points_topic" value="$(arg points_topic)"/>
+    <param name="rs3_rgb_topic" value="$(arg rs3_rgb_topic)"/>
+    <param name="rs3_points_topic" value="$(arg rs3_points_topic)"/>
     <param name="sync_slop_s" value="$(arg sync_slop_s)"/>
     <param name="sync_queue_size" value="$(arg sync_queue_size)"/>
     <param name="wait_for_task_trigger" value="$(arg wait_for_task_trigger)"/>
+    <param name="snapshot_output" value="$(arg snapshot_output)"/>
+    <param name="hold_snapshot_until_next_request" value="$(arg hold_snapshot_until_next_request)"/>
   </node>
 </launch>

@@ -19,6 +19,10 @@ OmniGibson 演示环境接到 **Piper 真机 + 两台固定 RealSense D435** 的
 > 相机外参、工作区、夹爪基线、模型依赖和性能验收默认均未批准，因此不能把
 > 本仓库视为下载后即可自主运行的真机发行版。
 
+PathSolver 逐次代价/控制点自动日志、RViz 轨迹高亮与一键 IK 预览，见
+[PathSolver 诊断工具](docs/PATH_SOLVER_INSPECTOR.md)。启动：
+`source setup.bash && roslaunch rekpiper_planning path_solver_inspector.launch`。
+
 ## M5 进度（2026-09-14）
 
 **M5.1–M5.4 已完成本次手动观测验证；M5.5/M5.6 按用户要求后置。**

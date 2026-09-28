@@ -1,4 +1,4 @@
-"""RS1-observed surface and horizontal side-grasp checks, before existing IK."""
+"""Observed-surface checks with optional horizontal side-grasp restrictions."""
 import numpy as np
 from scipy.spatial import cKDTree
 
@@ -38,7 +38,7 @@ def observed_table_plane(scene, target_mask, target_center):
 class HorizontalGraspPolicy:
     def __init__(self, scene_points, target_mask, camera_origin, gripper,
                  maximum_horizontal_angle_deg=10., contact_tolerance_m=.005,
-                 table_clearance_m=.003):
+                 table_clearance_m=.003, restrict_horizontal=True):
         self.scene = np.asarray(scene_points, dtype=float)
         target_mask = np.asarray(target_mask, dtype=bool)
         if (self.scene.ndim != 2 or self.scene.shape[1] != 3
@@ -48,6 +48,7 @@ class HorizontalGraspPolicy:
         if not 0 < maximum_horizontal_angle_deg <= 30:
             raise ValueError('invalid_horizontal_grasp_angle')
         self.angle_deg = float(maximum_horizontal_angle_deg)
+        self.restrict_horizontal = bool(restrict_horizontal)
         self.contact_tolerance_m = float(contact_tolerance_m)
         self.table_clearance_m = float(table_clearance_m)
         self.gripper = gripper
@@ -63,6 +64,12 @@ class HorizontalGraspPolicy:
         self.normals = vectors[:, :, 0]
         self.normal_valid = ((values[:, 0] / np.maximum(values[:, 1], 1e-12) < .25)
                              & (distances[:, -1] < .025) & (values[:, 1] > 1e-8))
+        if not self.restrict_horizontal:
+            self.region_mask = target_mask.copy()
+            self.region_tree = self.tree
+            self.closing_axes = []
+            self.approach_directions = []
+            return
         heights = self.target @ self.normal + self.offset
         lateral = (self.normal_valid & (np.abs(self.normals[:, 2]) < .5)
                    & (heights >= gripper.finger_height_m/2 + table_clearance_m))
@@ -100,6 +107,8 @@ class HorizontalGraspPolicy:
             self.approach_directions.append(direction)
 
     def directions_in_camera(self, base_from_camera):
+        if not self.restrict_horizontal:
+            return [None]
         rotation = np.asarray(base_from_camera)[:3, :3]
         return [rotation.T @ direction for direction in self.approach_directions]
 
@@ -124,22 +133,24 @@ class HorizontalGraspPolicy:
         # The two observed contacts must straddle the target along the closing axis.
         projected = (self.target-candidate.tcp_position) @ closing
         near_slice = np.abs((self.target-candidate.tcp_position) @ approach) < .01
-        near_slice &= np.abs(self.target[:, 2]-candidate.tcp_position[2]) < .01
+        height_axis = np.array([0., 0., 1.]) if self.restrict_horizontal else np.cross(approach, closing)
+        near_slice &= np.abs((self.target-candidate.tcp_position) @ height_axis) < .01
         bracketed = (np.any(near_slice) and np.min(projected[near_slice]) < -.005
                      and np.max(projected[near_slice]) > .005)
         checks = dict(
             piper_width=bool(candidate.width_ok),
             piper_insertion_depth=0 < candidate.insertion_depth_m <= self.gripper.usable_depth_m,
             visible_surface_region=region_distance <= self.contact_tolerance_m,
-            horizontal_approach=angles[0] <= self.angle_deg,
-            horizontal_closing=angles[1] <= self.angle_deg,
-            no_upward_approach=approach[2] <= 1e-6,
             contacts_on_observed_target=bool(np.all(distances <= self.contact_tolerance_m)),
             closing_normal_alignment=bool(np.all(self.normal_valid[indices]) and np.all(normal_angles <= 20.)),
             contacts_on_opposite_sides=bool(bracketed),
             open_contacts_outside_target=bool(np.all(open_distance >= .003)),
             contacts_above_table=bool(np.all(contact_heights >= self.table_clearance_m)),
             piper_gripper_above_table=clearance >= self.table_clearance_m)
+        if self.restrict_horizontal:
+            checks.update(horizontal_approach=angles[0] <= self.angle_deg,
+                          horizontal_closing=angles[1] <= self.angle_deg,
+                          no_upward_approach=approach[2] <= 1e-6)
         checks = {name: bool(value) for name, value in checks.items()}
         return dict(valid=all(checks.values()), checks=checks,
                     rejection_reasons=[name for name, ok in checks.items() if not ok],

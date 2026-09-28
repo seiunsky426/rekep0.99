@@ -87,6 +87,9 @@
            value="$(arg gripper_baseline)"/>
     </include>
     <include file="$(find rekpiper_mapping)/launch/safe_dual_mapping.launch">
+      <arg name="use_rs3" value="false"/>
+      <arg name="mapping_cameras_config"
+           value="$(find rekpiper_mapping)/config/nvblox_cameras_rs1.yaml"/>
       <arg name="workspace_bounds_min" value="[-0.20,-0.60,-0.07]"/>
       <arg name="workspace_bounds_max" value="[0.80,0.60,0.80]"/>
       <arg name="auto_rebuild_on_startup" value="false"/>
@@ -144,10 +147,11 @@
 
   <node pkg="rekpiper_grasp" type="keypoint_anygrasp_node.py"
         name="keypoint_anygrasp" output="screen" required="true">
-    <param name="points_topic" value="/rekpiper/camera/rs1/points_recognition"/>
+    <param name="points_topic" value="/rekpiper/camera/fused/points_base"/>
+    <rosparam param="source_cameras">[rs1, rs3]</rosparam>
     <param name="source_camera" value="rs1"/>
     <param name="inference_frame" value="rs1_color_optical_frame"/>
-    <param name="maximum_horizontal_angle_deg" value="10.0"/>
+    <param name="restrict_horizontal" value="false"/>
     <param name="anygrasp_sdk_root"
            value="$(arg vendor_root)/anygrasp_sdk/grasp_detection"/>
     <param name="anygrasp_checkpoint"

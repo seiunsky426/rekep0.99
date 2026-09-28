@@ -74,12 +74,28 @@ class CrossNodeContractsTest(unittest.TestCase):
             "rekpiper_grasp", "src/rekpiper_grasp/selection.py"))
         self.assertIn("request.grasp_target_pose", planner)
 
-    def test_anygrasp_launch_uses_rs1_and_horizontal_steering(self):
+    def test_anygrasp_launch_uses_fused_cloud_and_rs1_reference(self):
         launch = ET.fromstring(self._read('rekpiper_bringup', 'launch/system.launch'))
         node = launch.find("node[@name='keypoint_anygrasp']")
         self.assertEqual(node.find("param[@name='points_topic']").get('value'),
+                         '/rekpiper/camera/fused/points_base')
+        self.assertEqual(node.find("param[@name='inference_frame']").get('value'),
+                         'rs1_color_optical_frame')
+        self.assertEqual(node.find("rosparam[@param='source_cameras']").text, '[rs1, rs3]')
+        self.assertEqual(node.find("param[@name='restrict_horizontal']").get('value'), 'false')
+
+    def test_planning_map_and_task_perception_use_only_rs1(self):
+        launch = ET.fromstring(self._read('rekpiper_bringup', 'launch/system.launch'))
+        includes = list(launch.iter('include'))
+        mapping = next(node for node in includes if 'safe_dual_mapping.launch' in node.get('file'))
+        self.assertEqual(mapping.find("arg[@name='use_rs3']").get('value'), 'false')
+        self.assertTrue(mapping.find("arg[@name='mapping_cameras_config']").get('value').endswith('nvblox_cameras_rs1.yaml'))
+        perception = next(node for node in includes if 'task_perception.launch' in node.get('file'))
+        self.assertEqual(perception.find("arg[@name='points_topic']").get('value'),
                          '/rekpiper/camera/rs1/points_recognition')
-        self.assertEqual(node.find("param[@name='maximum_horizontal_angle_deg']").get('value'), '10.0')
+        execution = self._read('rekpiper_execution', 'scripts/closed_loop_node.py')
+        self.assertIn("rospy.Subscriber('/rekpiper/camera/rs1/points_recognition'", execution)
+        self.assertNotIn("rospy.Subscriber('/rekpiper/camera/fused/points_base'", execution)
 
     def test_tracker_uses_one_reference_and_one_global_top100(self):
         tracker = self._read(

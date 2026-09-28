@@ -106,7 +106,8 @@ class AnyGraspAdapter:
     def infer(self, points_camera, region_mask, source_camera,
               approach_steering: Optional[Sequence[float]] = None,
               approach_thresh_rad=np.pi, max_candidates=50,
-              dense_grasp=False) -> List[CameraGrasp]:
+              dense_grasp=False, collision_detection=True) -> List[CameraGrasp]:
+        """Return ranked native grasps; max_candidates=None retains all after NMS."""
         points = np.asarray(points_camera)
         mask = np.asarray(region_mask)
         if points.ndim != 2 or points.shape[1] != 3 or points.dtype != np.float32:
@@ -122,13 +123,16 @@ class AnyGraspAdapter:
                 raise ValueError("approach_steering must be a finite 3-vector")
             steering = steering.tolist()
         grasps = self._detector.get_grasp(points, {
-            "dense_grasp": bool(dense_grasp), "collision_detection": True,
+            "dense_grasp": bool(dense_grasp), "collision_detection": bool(collision_detection),
             "region_steering": mask, "approach_steering": steering,
             "approach_thresh": float(approach_thresh_rad)})
         if grasps is None:
             return []
+        ranked = grasps.nms().sort_by_score()
+        if max_candidates is not None:
+            ranked = ranked[:int(max_candidates)]
         output = []
-        for grasp in grasps.nms().sort_by_score()[:int(max_candidates)]:
+        for grasp in ranked:
             rotation = np.asarray(grasp.rotation_matrix, dtype=float)
             translation = np.asarray(grasp.translation, dtype=float)
             scalars = [grasp.width, grasp.depth, grasp.score]
@@ -141,3 +145,52 @@ class AnyGraspAdapter:
                 translation, rotation, float(grasp.width), float(grasp.depth),
                 float(grasp.score), str(source_camera)))
         return output
+
+    def infer_directional(self, points_camera, region_mask, source_camera,
+                          base_from_camera, table_normal, table_offset, gripper,
+                          cancelled=lambda: False):
+        """Top/side model proposals with Piper/table audit; contact is separate.
+
+        Returned records retain every merged-NMS proposal, including rejections.
+        No IK, control client, or execution authority is created here.
+        """
+        import random
+        import torch
+        from graspnetAPI import GraspGroup
+        from .blue_cloud_comparison import native_pose_record, transform_points
+        from .directional_grasp import direction_queries, DirectionalAudit
+
+        transform = np.asarray(base_from_camera)
+        target = transform_points(points_camera[region_mask], transform)
+        audit = DirectionalAudit(target, table_normal, table_offset, gripper)
+        records = []
+        for mode in ('top', 'side'):
+            directions, cone = direction_queries(table_normal, mode)
+            raw = []
+            for direction in directions:
+                if cancelled():
+                    raise InterruptedError('planning_cancelled')
+                random.seed(0); np.random.seed(0); torch.manual_seed(0)
+                torch.cuda.manual_seed_all(0)
+                torch.backends.cudnn.benchmark = False
+                torch.backends.cudnn.deterministic = True
+                proposals = self.infer(
+                    points_camera, region_mask, source_camera,
+                    approach_steering=transform[:3, :3].T @ direction,
+                    approach_thresh_rad=np.deg2rad(cone), max_candidates=None,
+                    dense_grasp=False, collision_detection=False)
+                for grasp in proposals:
+                    raw.append(np.r_[grasp.score, grasp.width_m, gripper.finger_height_m,
+                                     grasp.depth_m, grasp.rotation.ravel(), grasp.translation, -1.])
+            merged = GraspGroup(np.asarray(raw).reshape(-1, 17)).nms().sort_by_score() if raw else []
+            for index, value in enumerate(merged):
+                if cancelled():
+                    raise InterruptedError('planning_cancelled')
+                grasp = CameraGrasp(value.translation, value.rotation_matrix, value.width,
+                                    value.depth, value.score, source_camera)
+                identifier = '{}-{:03d}'.format(mode, index+1)
+                row = native_pose_record(grasp, transform, identifier)
+                row.update(audit.audit(grasp, transform, mode, identifier))
+                row['mode'] = mode
+                records.append(row)
+        return records

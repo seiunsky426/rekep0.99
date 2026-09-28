@@ -38,6 +38,19 @@ class OfflineObservationTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'timestamps'):
             build_depth_collision_grid(frames, [0, 0, .5], [.1, .1, 1.5], .1)
 
+    def test_rs1_only_preserves_unknown_space(self):
+        frames = {'rs1': self.frames()['rs1']}
+        grid = build_depth_collision_grid(frames, [-.1, -.1, .5], [.1, .1, 1.5], .1)
+        self.assertLess(grid['distances_m'][1, 1, 0], 0)
+        self.assertTrue(grid['occupied'][1, 1, 5])
+        self.assertFalse(grid['observed'][1, 1, 10])
+        self.assertGreater(grid['distances_m'][1, 1, 10], 0)
+
+    def test_rs3_cannot_replace_planning_camera(self):
+        with self.assertRaisesRegex(ValueError, 'rs1_camera_frame_required'):
+            build_depth_collision_grid({'rs3': self.frames()['rs3']},
+                                       [-.1, -.1, .5], [.1, .1, 1.5], .1)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """Original SAM masks followed by paper-v2 DINOv2 ViT-S/14 reg4 candidates."""
 
+import gc
 import json
+import os
+from pathlib import Path
 import threading
 import time
 
@@ -81,8 +84,9 @@ class TaskPerceptionNode:
         self._last_wait_preview_monotonic = -np.inf
         self._successful_locks = 0
         self._locked_snapshot = None
-        self._initial_stability_started = False
-        self._initial_scene_stable = False
+        self._capture_stamp_ns = 0
+        self._snapshot_output = rospy.get_param("~snapshot_output", "")
+        self._hold_snapshot = bool(rospy.get_param("~hold_snapshot_until_next_request", False))
         self._min_valid_pixels = int(rospy.get_param("~scene/min_valid_pixels", 150))
         self._minimum_confidence = float(rospy.get_param("~scene/minimum_confidence", 0.70))
         self._visual_closing_px = int(
@@ -102,8 +106,9 @@ class TaskPerceptionNode:
         if not 0.0 < self._max_workspace_mask_ratio < 1.0:
             raise rospy.ROSInitException(
                 "scene/max_workspace_mask_ratio must lie strictly between 0 and 1")
-        self._sam = SAMAutomaticSegmenter(
-            rospy.get_param("~scene/sam_model_path"), requested_device,
+        self._sam_checkpoint = rospy.get_param("~scene/sam_model_path")
+        self._inference_device = requested_device
+        self._sam_options = dict(
             model_type=rospy.get_param("~scene/sam_model_type", "vit_h"),
             use_float16=rospy.get_param("~scene/sam_use_float16", True),
             min_area_px=rospy.get_param("~scene/min_area_px", 150),
@@ -122,10 +127,12 @@ class TaskPerceptionNode:
             "device": requested_device, "bounds_min": self._bounds_min.tolist(),
             "bounds_max": self._bounds_max.tolist(), "seed": int(rospy.get_param("~keypoint_proposer/seed", 0)),
         }
-        self._proposer = OfficialKeypointProposerAdapter(
+        self._proposer_options = (
             rospy.get_param("~keypoint_proposer/official_root"),
             rospy.get_param("~keypoint_proposer/dinov2_repo"),
             rospy.get_param("~keypoint_proposer/dinov2_weights"), config)
+        self._sam = self._proposer = None
+        self._ensure_inference_models()
         self._keypoints_pub = rospy.Publisher("~keypoints", Keypoint3DArray, queue_size=1, latch=True)
         self._instances_pub = rospy.Publisher(
             "~instances", InstanceGeometryArray, queue_size=1, latch=True)
@@ -136,6 +143,7 @@ class TaskPerceptionNode:
         self._geometry_valid_mask_pub = rospy.Publisher(
             "~geometry_valid_mask", Image, queue_size=1, latch=True)
         self._candidate_pub = rospy.Publisher("~candidate_image", Image, queue_size=1, latch=True)
+        self._rs3_candidate_pub = rospy.Publisher("~rs3_candidate_image", Image, queue_size=1, latch=True)
         self._source_image_pub = rospy.Publisher("~source_image", Image, queue_size=1, latch=True)
         self._task_status_pub = rospy.Publisher(
             "~task_status", String, queue_size=1, latch=True)
@@ -147,13 +155,34 @@ class TaskPerceptionNode:
         self._sync_queue_size = int(rospy.get_param("~sync_queue_size", 5))
         if self._sync_slop_s <= 0.0 or self._sync_queue_size < 2:
             raise rospy.ROSInitException("sync_slop_s must be positive and sync_queue_size at least 2")
+        rs3_rgb_topic = rospy.get_param("~rs3_rgb_topic", "")
+        rs3_points_topic = rospy.get_param("~rs3_points_topic", "")
+        if bool(rs3_rgb_topic) != bool(rs3_points_topic):
+            raise rospy.ROSInitException("RS3 RGB and points topics must be configured together")
+        streams = [rgb, xyz]
+        if rs3_rgb_topic:
+            streams.extend((message_filters.Subscriber(rs3_rgb_topic, Image, queue_size=1),
+                            message_filters.Subscriber(rs3_points_topic, PointCloud2, queue_size=1)))
         self._sync = message_filters.ApproximateTimeSynchronizer(
-            [rgb, xyz], self._sync_queue_size, self._sync_slop_s)
+            streams, self._sync_queue_size, self._sync_slop_s)
         self._sync.registerCallback(self._callback)
         self._publish_task_status(self._state)
         rospy.loginfo(
             "SAM+DINOv2 scene perception ready on %s (state=%s task_gate=%s)",
             requested_device, self._state, self._wait_for_task_trigger)
+
+    def _ensure_inference_models(self):
+        if self._sam is None:
+            self._sam = SAMAutomaticSegmenter(
+                self._sam_checkpoint, self._inference_device, **self._sam_options)
+        if self._proposer is None:
+            self._proposer = OfficialKeypointProposerAdapter(*self._proposer_options)
+
+    def _release_inference_models(self):
+        self._sam = self._proposer = None
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
     @staticmethod
     def _required_vector(name, length):
@@ -163,7 +192,7 @@ class TaskPerceptionNode:
         return value
 
     def _publish_task_status(self, state, detail=""):
-        snapshot_stamp_ns = 0
+        snapshot_stamp_ns = self._capture_stamp_ns
         if state == self.LOCKED and self._locked_snapshot is not None:
             snapshot_stamp_ns = (
                 self._locked_snapshot["keypoints"].header.stamp.to_nsec())
@@ -183,10 +212,10 @@ class TaskPerceptionNode:
         # Serialize the trigger with RGB-D processing so a completed inference
         # can always be associated with exactly one task serial.
         with self._callback_lock:
-            previous_state = self._state
             self._task_trigger_stamp_ns = rospy.Time.now().to_nsec()
             self._task_request_serial += 1
             self._task_instruction = instruction
+            self._capture_stamp_ns = 0
             if self._locked_snapshot is not None:
                 snapshot = self._locked_snapshot
                 header = snapshot["keypoints"].header
@@ -205,18 +234,11 @@ class TaskPerceptionNode:
                     np.zeros(snapshot["source_bgr"].shape[:2], dtype=np.uint16),
                     waiting_image)
                 self._locked_snapshot = None
-            self._state = (
-                self.WAITING_FOR_STABLE_SCENE
-                if previous_state == self.WAITING_FOR_STABLE_SCENE
-                else self.DETECTING)
+            self._state = self.DETECTING
             self._last_inference_monotonic = -np.inf
-            detail = (
-                "task_received_waiting_for_stability"
-                if self._state == self.WAITING_FOR_STABLE_SCENE
-                else "task_received")
-            self._publish_task_status(self._state, detail)
+            self._publish_task_status(self._state, "waiting_for_fresh_rgbd")
         rospy.loginfo(
-            "Received task request serial=%d; next stable RGB-D snapshot "
+            "Received task request serial=%d; next fresh RGB-D snapshot "
             "will run SAM+DINOv2", self._task_request_serial)
 
     @staticmethod
@@ -227,13 +249,14 @@ class TaskPerceptionNode:
             raise ValueError("PointCloud2 must be organized without row padding")
         return np.frombuffer(message.data, np.float32).reshape(message.height, message.width, 3)
 
-    def _failure(self, header, reason):
+    def _failure(self, header, reason, detail=""):
         self._keypoints_pub.publish(Keypoint3DArray(header=header, keypoints=[], all_valid=False,
                                                     motion_allowed=False, status=reason))
         self._instances_pub.publish(InstanceGeometryArray(
             header=header, instances=[], all_valid=False, status=reason))
         if self._wait_for_task_trigger and self._task_request_serial:
-            self._publish_task_status(self.DETECTING, reason + "_retrying")
+            self._publish_task_status(self.DETECTING, reason + "_retrying" +
+                                      (": " + detail if detail else ""))
         rospy.logwarn_throttle(2.0, "Perception blocked motion: %s", reason)
 
     def _reject_input(self, header, detail):
@@ -249,7 +272,7 @@ class TaskPerceptionNode:
             self._failure(header, "scene_changed_waiting_for_stability")
             return
         rospy.logwarn_throttle(2.0, "Candidate refresh input rejected: %s", detail)
-        self._failure(header, "candidate_refresh_failed")
+        self._failure(header, "candidate_refresh_failed", detail)
 
     def _publish_images(self, header, bgr, visual_label_map,
                         geometry_label_map, candidate_bgr):
@@ -267,8 +290,26 @@ class TaskPerceptionNode:
         candidate_msg.header = header
         self._candidate_pub.publish(candidate_msg)
 
+    def _save_segmentation_snapshot(self, stamp_ns, mask, xyz, rs3=None):
+        if not self._snapshot_output:
+            return
+        output = Path(self._snapshot_output)
+        output.parent.mkdir(parents=True, exist_ok=True)
+        temporary = output.with_name(output.name + ".tmp")
+        arrays = dict(stamp_ns=np.int64(stamp_ns),
+                      mask=np.asarray(mask, dtype=np.uint16),
+                      xyz=np.asarray(xyz, dtype=np.float32))
+        if rs3 is not None:
+            arrays.update(rs3_stamp_ns=np.int64(rs3[0]),
+                          rs3_mask=np.asarray(rs3[1], dtype=np.uint16),
+                          rs3_xyz=np.asarray(rs3[2], dtype=np.float32))
+        with temporary.open("wb") as stream:
+            np.savez_compressed(stream, **arrays)
+        os.replace(str(temporary), str(output))
+
     def _invalidate_locked_snapshot(self, header, bgr):
         self._locked_snapshot = None
+        self._capture_stamp_ns = 0
         self._keypoints_pub.publish(Keypoint3DArray(
             header=header, keypoints=[], all_valid=False, motion_allowed=False,
             status="scene_changed_waiting_for_stability"))
@@ -285,22 +326,30 @@ class TaskPerceptionNode:
         self._last_monitor_monotonic = now
         return True
 
-    def _callback(self, rgb_msg, points_msg):
+    def _callback(self, rgb_msg, points_msg, rs3_rgb_msg=None, rs3_points_msg=None):
         # message_filters callbacks can arrive from ROS subscriber threads while
         # GPU inference is still running. Drop frames so at most one model
         # pass can execute at a time.
         if not self._callback_lock.acquire(False):
             return
         try:
-            self._process_callback(rgb_msg, points_msg)
+            self._process_callback(rgb_msg, points_msg, rs3_rgb_msg, rs3_points_msg)
         finally:
             self._callback_lock.release()
 
-    def _process_callback(self, rgb_msg, points_msg):
+    def _process_callback(self, rgb_msg, points_msg, rs3_rgb_msg=None, rs3_points_msg=None):
         if not capture_follows_task_trigger(
                 rgb_msg.header.stamp.to_nsec(), points_msg.header.stamp.to_nsec(),
                 self._task_trigger_stamp_ns):
             return
+        if rs3_rgb_msg is not None and (
+                not capture_follows_task_trigger(
+                    rs3_rgb_msg.header.stamp.to_nsec(), rs3_points_msg.header.stamp.to_nsec(),
+                    self._task_trigger_stamp_ns)
+                or rs3_points_msg.header.frame_id != self._base_frame
+                or abs((rs3_rgb_msg.header.stamp - rs3_points_msg.header.stamp).to_sec()) > self._sync_slop_s
+                or abs((rs3_rgb_msg.header.stamp - rgb_msg.header.stamp).to_sec()) > self._sync_slop_s):
+            return self._reject_input(points_msg.header, "rs3_rgbd_or_cross_view_skew")
         if points_msg.header.frame_id != self._base_frame:
             return self._reject_input(
                 points_msg.header, "pointcloud_not_in_{}".format(self._base_frame))
@@ -311,6 +360,11 @@ class TaskPerceptionNode:
             xyz = self._organized_xyz(points_msg)
             if bgr.shape[:2] != xyz.shape[:2]:
                 raise ValueError("RGB and point cloud dimensions differ")
+            if rs3_rgb_msg is not None:
+                rs3_bgr = self._bridge.imgmsg_to_cv2(rs3_rgb_msg, "bgr8")
+                rs3_xyz = self._organized_xyz(rs3_points_msg)
+                if rs3_bgr.shape[:2] != rs3_xyz.shape[:2]:
+                    raise ValueError("RS3 RGB and point cloud dimensions differ")
         except (CvBridgeError, ValueError) as exc:
             return self._reject_input(points_msg.header, "perception_error: {}".format(exc))
 
@@ -336,6 +390,8 @@ class TaskPerceptionNode:
             return
 
         if self._state == self.LOCKED:
+            if self._hold_snapshot:
+                return
             if not self._monitor_is_due(now):
                 return
             try:
@@ -366,29 +422,16 @@ class TaskPerceptionNode:
             self._publish_task_status(self.DETECTING, "scene_stable_refreshing")
             rospy.loginfo("Scene stable; refreshing candidates once (state=%s)", self._state)
 
-        # Do not spend the one initial model pass on D435 startup exposure/depth
-        # transients.  This reuses the configured adjacent-frame stability test
-        # and does not add a fourth state or run either neural network.
-        if self._successful_locks == 0 and not self._initial_scene_stable:
-            if not self._monitor_is_due(now):
-                return
-            if not self._initial_stability_started:
-                self._scene_monitor.begin_waiting_for_stability(bgr, xyz)
-                self._initial_stability_started = True
-                rospy.loginfo("Received first RGB-D frame; waiting for stable scene")
-                return
-            try:
-                self._initial_scene_stable = self._scene_monitor.update_waiting(bgr, xyz)
-            except ValueError as exc:
-                return self._reject_input(points_msg.header, "scene_monitor_error: {}".format(exc))
-            if not self._initial_scene_stable:
-                return
-            rospy.loginfo("Initial RGB-D scene is stable; running first SAM+DINOv2 pass")
-
         if now - self._last_inference_monotonic < self._min_period_s:
             return
         self._last_inference_monotonic = now
+        self._capture_stamp_ns = points_msg.header.stamp.to_nsec()
+        bgr, xyz = bgr.copy(), xyz.copy()
+        if rs3_rgb_msg is not None:
+            rs3_bgr, rs3_xyz = rs3_bgr.copy(), rs3_xyz.copy()
+        self._publish_task_status(self.DETECTING, "snapshot_locked_running_sam_dinov2")
         try:
+            self._ensure_inference_models()
             scene_masks = arbitrate_quality_ordered_masks(
                 self._sam.segment(bgr))
             workspace_pixels = organized_workspace_mask(
@@ -436,6 +479,36 @@ class TaskPerceptionNode:
                 cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB), xyz, geometry_masks)
             if not len(result.points):
                 raise RuntimeError("dinov2_no_candidates")
+            rs3_snapshot = None
+            if rs3_rgb_msg is not None:
+                rs3_masks = arbitrate_quality_ordered_masks(self._sam.segment(rs3_bgr))
+                rs3_workspace = organized_workspace_mask(
+                    rs3_xyz, self._bounds_min, self._bounds_max)
+                rs3_visual, rs3_geometry, rs3_pixels = [], [], []
+                for candidate in rs3_masks:
+                    raw = np.asarray(candidate, dtype=bool)
+                    seed = raw & rs3_workspace
+                    if workspace_mask_area_ratio(seed, rs3_workspace) > self._max_workspace_mask_ratio:
+                        continue
+                    clean = clean_organized_mask(
+                        rs3_xyz, seed, erosion_px=self._geometry_erosion_px)
+                    count = int(clean.sum())
+                    confidence = min(1.0, count / float(max(self._min_valid_pixels, 1)))
+                    confidence *= count / float(max(int(seed.sum()), 1))
+                    if count < self._min_valid_pixels or confidence < self._minimum_confidence:
+                        continue
+                    visual = prepare_sam_visual_mask(raw, closing_px=self._visual_closing_px)
+                    estimate = estimate_instance_geometry(rs3_xyz, clean, visual_mask=visual)
+                    rs3_visual.append(visual)
+                    rs3_geometry.append(clean)
+                    rs3_pixels.append(estimate.medoid_pixel_rc)
+                if not rs3_geometry:
+                    raise RuntimeError("rs3_no_masks_with_valid_depth")
+                rs3_labels = masks_to_label_map(np.stack(rs3_geometry))
+                rs3_annotated = draw_state_banner(
+                    annotate_vlm_candidates(rs3_bgr, np.stack(rs3_visual), [], []),
+                    "RS3 STATIC LOCK", (0, 220, 0))
+                rs3_snapshot = (rs3_points_msg.header.stamp.to_nsec(), rs3_labels, rs3_xyz)
         except (CvBridgeError, RuntimeError, ValueError, FileNotFoundError) as exc:
             rospy.logwarn("SAM+DINOv2 candidate refresh failed: %s", exc)
             return self._failure(points_msg.header, "candidate_refresh_failed")
@@ -492,6 +565,16 @@ class TaskPerceptionNode:
                 bgr, visual_masks, candidate_pixels,
                 candidate_groups, candidate_sources),
             banner, (0, 220, 0))
+        try:
+            self._save_segmentation_snapshot(points_msg.header.stamp.to_nsec(),
+                                             geometry_label_map, xyz, rs3_snapshot)
+        except OSError as exc:
+            rospy.logerr("Could not save locked segmentation snapshot: %s", exc)
+            return self._failure(points_msg.header, "segmentation_snapshot_save_failed")
+        if rs3_snapshot is not None:
+            rs3_msg = self._bridge.cv2_to_imgmsg(rs3_annotated, "bgr8")
+            rs3_msg.header = rs3_points_msg.header
+            self._rs3_candidate_pub.publish(rs3_msg)
         self._keypoints_pub.publish(keypoint_array)
         self._instances_pub.publish(instance_array)
         self._publish_images(
@@ -514,6 +597,9 @@ class TaskPerceptionNode:
             "locked_static_snapshot_with_{}_candidates".format(len(keypoints)))
         rospy.loginfo("Locked %d static candidates after one SAM+DINOv2 pass (state=%s)",
                       len(keypoints), self._state)
+        if self._hold_snapshot:
+            self._release_inference_models()
+            rospy.loginfo("Released SAM and DINOv2 GPU models after saving locked snapshot")
 
 
 if __name__ == "__main__":

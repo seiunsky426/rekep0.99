@@ -13,6 +13,8 @@ find_package(catkin REQUIRED COMPONENTS
 add_action_files(FILES
   CommandGripper.action
   ExecuteReKep.action
+  PlanSupervisedStage.action
+  ExecuteSupervisedStage.action
 )
 
 add_message_files(FILES
@@ -36,6 +38,7 @@ add_message_files(FILES
 )
 
 add_service_files(FILES
+  SupervisedCommand.srv
   ApproveReKepProgram.srv
   CaptureSDFSnapshot.srv
   GenerateReKepProgram.srv

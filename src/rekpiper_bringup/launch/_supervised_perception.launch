@@ -1,0 +1,39 @@
+<?xml version="1.0"?>
+<launch>
+  <arg name="tracking_output" default="$(env REKPIPER_ROOT)/runtime/supervised_tracking"/>
+  <arg name="snapshot_output" default="$(env REKPIPER_ROOT)/runtime/supervised_segmentation_snapshot.npz"/>
+  <include file="$(find rekpiper_perception)/launch/task_perception.launch">
+    <arg name="workspace_bounds_min" value="[-0.20,-0.60,-0.07]"/>
+    <arg name="workspace_bounds_max" value="[0.80,0.60,0.80]"/>
+    <arg name="base_frame" value="base_link"/>
+    <arg name="rgb_topic" value="/rs1/color/image_raw"/>
+    <arg name="points_topic" value="/rekpiper/supervised/rs1/points"/>
+    <arg name="rs3_rgb_topic" value="/rs3/color/image_raw"/>
+    <arg name="rs3_points_topic" value="/rekpiper/supervised/rs3/points"/>
+    <arg name="wait_for_task_trigger" value="true"/>
+    <arg name="snapshot_output" value="$(arg snapshot_output)"/>
+    <arg name="hold_snapshot_until_next_request" value="true"/>
+  </include>
+  <node pkg="rekpiper_execution" type="dual_mask_cloud_review_node.py"
+        name="dual_mask_cloud_review" output="screen">
+    <param name="snapshot_output" value="$(arg snapshot_output)"/>
+    <param name="system_config" value="$(find rekpiper_bringup)/config/system.yaml"/>
+  </node>
+  <node pkg="rekpiper_perception" type="scene_snapshot_node.py"
+        name="supervised_scene_snapshot" output="screen"/>
+  <node pkg="rekpiper_perception" type="dual_dino_tracker_node.py"
+        name="supervised_dino_tracker" output="screen">
+    <rosparam param="camera_names">[rs1]</rosparam>
+    <param name="rs1_points_topic" value="/rekpiper/supervised/rs1/points"/>
+    <param name="use_object_masks" value="false"/>
+    <param name="rate_hz" value="10.0"/>
+    <param name="maximum_frame_age_s" value="0.6"/>
+    <param name="maximum_reference_offset_s" value="0.20"/>
+    <param name="dinov2_repo" value="$(env REKPIPER_VENDOR_ROOT)/dinov2"/>
+    <param name="dinov2_weights" value="$(env REKPIPER_MODEL_ROOT)/dinov2_vits14_reg4_pretrain.pth"/>
+  </node>
+  <node pkg="rekpiper_perception" type="keypoint_trajectory_node.py"
+        name="supervised_keypoint_trajectory" output="screen">
+    <param name="output_directory" value="$(arg tracking_output)"/>
+  </node>
+</launch>

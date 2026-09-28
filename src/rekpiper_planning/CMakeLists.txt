@@ -8,11 +8,13 @@ find_package(moveit_ros_planning REQUIRED)
 find_package(catkin REQUIRED COMPONENTS
   cv_bridge
   geometry_msgs
+  interactive_markers
   rekpiper_msgs
   rekpiper_acceptance
   rospy
   sensor_msgs
   std_msgs
+  std_srvs
   tf2_ros
   trajectory_msgs
   visualization_msgs
@@ -27,8 +29,8 @@ target_link_libraries(rekpiper_motion_backend ${OMPL_LIBRARIES}
 install(TARGETS rekpiper_motion_backend LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION})
 
 catkin_package(CATKIN_DEPENDS
-  cv_bridge geometry_msgs rekpiper_msgs rekpiper_acceptance rospy
-  sensor_msgs std_msgs tf2_ros trajectory_msgs visualization_msgs
+  cv_bridge geometry_msgs interactive_markers rekpiper_msgs rekpiper_acceptance rospy
+  sensor_msgs std_msgs std_srvs tf2_ros trajectory_msgs visualization_msgs
 )
 
 catkin_install_python(PROGRAMS
@@ -39,6 +41,7 @@ catkin_install_python(PROGRAMS
   scripts/m8_offline_preview_node.py
   scripts/m8_three_stage_preview_node.py
   scripts/program_server_node.py
+  scripts/path_solver_inspector_node.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
@@ -46,7 +49,13 @@ install(DIRECTORY config launch
   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION})
 
 if(CATKIN_ENABLE_TESTING)
+  catkin_add_nosetests(test/test_path_solver_trace.py)
+  catkin_add_nosetests(test/test_piper_path_solver.py)
+  catkin_add_nosetests(test/test_path_preview.py)
   catkin_add_nosetests(test/test_offline_observation.py)
+  catkin_add_nosetests(test/test_collision_workspace.py)
+  catkin_add_nosetests(test/test_grasp_esdf_audit.py)
+  catkin_add_nosetests(test/test_table_surface.py)
   catkin_add_nosetests(test/test_continuous_ik.py)
   catkin_add_nosetests(test/test_ik_path_diagnostics.py)
   catkin_add_nosetests(test/test_motion_backend.py DEPENDENCIES rekpiper_motion_backend)

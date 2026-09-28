@@ -2,6 +2,7 @@
 
 import unittest
 import json
+from dataclasses import replace
 import tempfile
 from pathlib import Path
 from types import SimpleNamespace
@@ -97,6 +98,53 @@ class RealtimeStageEntryTest(unittest.TestCase):
         np.testing.assert_array_equal(result.cartesian_path[-1], target)
         self.assertEqual(result.diagnostics['subgoal_source'], 'bound_anygrasp_tcp')
         self.assertEqual(result.subgoal_values, (0.,))
+
+    def test_fixed_supervised_target_skips_redundant_subgoal_search(self):
+        planner = PersistentReKepPlanner.__new__(PersistentReKepPlanner)
+        planner.modules = modules()
+        planner._bind = planner._enter_stage = MagicMock()
+        planner.continuity_guard_enabled = True
+        planner.maximum_warm_target_jump_m = .20
+        planner._last_target = {}
+        planner.path_config = {'constraint_tolerance': .0001}
+        planner._transformed = lambda pose, ee, points, movable: np.vstack([pose[:3], points[1:]])
+        planner._official_spline_path = lambda controls: controls
+        planner._joint_path = lambda poses, joints: np.c_[poses[:, :3], np.zeros((len(poses), 3))]
+        planner.ik_solver = SimpleNamespace(forward=lambda q: _Transforms.pose2mat([q[:3], q[3:]]))
+        target = np.array([.35, .02, .20, 0., 0., 0., 1.])
+        subgoal_solver = MagicMock(last_opt_result=None)
+        subgoal_solver.solve.side_effect = AssertionError('fixed target must skip SubgoalSolver')
+        path_solver = MagicMock(last_opt_result=None)
+        path_solver.solve.return_value = (target[None, :], {})
+        planner._solver_pair = lambda stage, joints: (subgoal_solver, path_solver)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            root.joinpath('metadata.json').write_text(json.dumps({'instruction': 'pregrasp the cube'}))
+            constraint = ('def stage1_subgoal_constraint1(end_effector, keypoints):\n'
+                          '    return np.linalg.norm(end_effector - np.array([.35, .02, .20]))\n')
+            root.joinpath('program.py').write_text(
+                'num_stages = 1\ngrasp_keypoints = [-1]\nrelease_keypoints = [-1]\n' + constraint)
+            root.joinpath('stage1_subgoal_constraints.txt').write_text(constraint)
+            request = RealtimePlanningRequest(
+                PlanningGeneration('snapshot', 'layout', 'map', 'hash', 1),
+                directory, 1, np.array([.2, 0., .3, 0., 0., 0., 1.]),
+                np.zeros(6), np.array([[.37, .02, .20]]), np.array([1]), -1,
+                np.zeros((2, 2, 2)), np.zeros((1, 3)), lambda index: 0.,
+                fixed_target_pose=target)
+            result = planner.solve(request)
+            np.testing.assert_array_equal(result.target_pose, target)
+            np.testing.assert_array_equal(path_solver.solve.call_args[0][1], target)
+            self.assertEqual(result.diagnostics['subgoal_source'], 'fixed_target_pose')
+            self.assertEqual(result.subgoal_values, (0.,))
+            self.assertFalse(result.subgoal_from_scratch)
+            self.assertFalse(request.is_grasp_stage)
+            with self.assertRaisesRegex(RealtimePlanningError, 'invalid fixed target pose'):
+                planner.solve(replace(request, fixed_target_pose=np.zeros(7)))
+            wrong = target.copy()
+            wrong[0] += .01
+            with self.assertRaisesRegex(RealtimePlanningError, 'subgoal result violates'):
+                planner.solve(replace(request, fixed_target_pose=wrong))
+        subgoal_solver.solve.assert_not_called()
 
     def test_detector_constraint_does_not_change_other_stages_or_accept_bad_pose(self):
         functions = [lambda ee, keypoints: 7.]

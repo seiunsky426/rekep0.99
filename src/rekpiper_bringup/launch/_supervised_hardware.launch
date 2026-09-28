@@ -1,0 +1,54 @@
+<?xml version="1.0"?>
+<launch>
+  <!-- Internal: a live operator panel and backend session lease are mandatory. -->
+  <arg name="session_id"/>
+  <arg name="can_port"/>
+  <group ns="/rekpiper/supervised">
+    <node pkg="piper" type="piper_ctrl_single_node.py" ns="driver" name="piper_driver" output="screen" required="true">
+      <param name="can_port" value="$(arg can_port)"/>
+      <param name="execution_profile" value="supervised"/>
+      <param name="supervised_session_id" value="$(arg session_id)"/>
+      <param name="auto_enable" value="false"/>
+      <param name="gripper_exist" value="true"/>
+      <param name="armed_topic" value="/rekpiper/supervised/armed"/>
+      <param name="authorized_joint_command_caller" value="/rekpiper/supervised/trajectory_bridge"/>
+      <param name="authorized_gripper_service_caller" value="/rekpiper/supervised/gripper_action"/>
+      <param name="allow_cartesian_commands" value="false"/>
+      <param name="allow_go_zero_service" value="false"/>
+      <remap from="joint_ctrl_single" to="/rekpiper/supervised/joint_command"/>
+      <remap from="joint_states_single" to="/joint_states_single"/>
+      <remap from="arm_status" to="/arm_status"/>
+    </node>
+    <node pkg="rekpiper_execution" type="piper_trajectory_bridge_node.py" name="trajectory_bridge" output="screen" required="true">
+      <param name="execution_profile" value="supervised"/>
+      <param name="supervised_session_id" value="$(arg session_id)"/>
+      <param name="allow_hardware_commands" value="true"/>
+      <param name="armed_topic" value="/rekpiper/supervised/armed"/>
+      <param name="command_topic" value="/rekpiper/supervised/joint_command"/>
+      <param name="action_name" value="/rekpiper/supervised/follow_joint_trajectory"/>
+      <param name="stop_service" value="/rekpiper/supervised/driver/stop_srv"/>
+      <param name="command_rate_hz" value="50.0"/>
+      <param name="maximum_velocity_rad_s" value="0.05"/>
+      <param name="maximum_acceleration_rad_s2" value="0.10"/>
+      <param name="maximum_jerk_rad_s3" value="0.50"/>
+      <param name="start_tolerance_rad" value="0.01"/>
+      <param name="goal_tolerance_rad" value="0.01"/>
+      <param name="tracking_tolerance_rad" value="0.05"/>
+      <param name="driver_speed_percent" value="5"/>
+    </node>
+    <node pkg="rekpiper_execution" type="piper_gripper_action_node.py" name="gripper_action" output="screen" required="true">
+      <param name="execution_profile" value="supervised"/>
+      <param name="supervised_session_id" value="$(arg session_id)"/>
+      <param name="allow_hardware_commands" value="true"/>
+      <param name="armed_topic" value="/rekpiper/supervised/armed"/>
+      <param name="action_name" value="/rekpiper/supervised/command_gripper"/>
+      <param name="gripper_service" value="/rekpiper/supervised/driver/gripper_srv"/>
+      <param name="stop_service" value="/rekpiper/supervised/driver/stop_srv"/>
+    </node>
+    <node pkg="rekpiper_execution" type="gripper_joint_state_adapter_node.py" name="gripper_state_adapter">
+      <param name="input_topic" value="/joint_states_single"/>
+      <param name="output_topic" value="/joint_states"/>
+      <param name="maximum_opening_m" value="0.070"/>
+    </node>
+  </group>
+</launch>

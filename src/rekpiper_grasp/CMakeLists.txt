@@ -35,6 +35,8 @@ install(PROGRAMS
 
 if(CATKIN_ENABLE_TESTING)
   catkin_add_nosetests(test/test_grasp_geometry.py)
+  catkin_add_nosetests(test/test_blue_cloud_comparison.py)
+  catkin_add_nosetests(test/test_directional_grasp.py)
   catkin_add_nosetests(test/test_target_geometry.py)
   catkin_add_nosetests(test/test_horizontal_grasp.py)
   catkin_add_nosetests(test/test_selection.py)

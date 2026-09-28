@@ -6,10 +6,12 @@ pinned local model while constructing the class and captures the candidate
 pixels at the official projection boundary.  No upstream source is patched.
 """
 
+from contextlib import redirect_stderr, redirect_stdout
 from dataclasses import dataclass
 import hashlib
 import importlib
 import importlib.util
+import os
 from pathlib import Path
 import sys
 from typing import Dict, Tuple
@@ -219,7 +221,10 @@ class OfficialKeypointProposerAdapter:
 
         self._active_unique_labels = np.unique(masks).astype(np.int32)
         self._last_candidate_keep = np.empty((0,), dtype=bool)
-        candidates, annotated = self._proposer.get_keypoints(rgb, points, masks)
+        # The official k-means dependency flushes both output streams.
+        # Detached roslaunch sessions can inherit closed terminal pipes.
+        with open(os.devnull, 'w') as progress, redirect_stderr(progress), redirect_stdout(progress):
+            candidates, annotated = self._proposer.get_keypoints(rgb, points, masks)
         candidates = np.asarray(candidates, dtype=np.float32).reshape(-1, 3)
         if len(self._last_candidate_keep) != len(candidates):
             raise RuntimeError("official proposer candidate capture is inconsistent")

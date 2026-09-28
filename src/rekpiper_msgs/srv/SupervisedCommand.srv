@@ -1,0 +1,5 @@
+string command
+string arguments_json
+---
+bool success
+string status

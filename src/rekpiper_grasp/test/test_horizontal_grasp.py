@@ -70,6 +70,34 @@ class HorizontalGraspTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'table_points_missing'):
             HorizontalGraspPolicy(self.target, np.ones(len(self.target), dtype=bool), [.2, 0., .3], self.gripper)
 
+    def test_unrestricted_top_down_keeps_contact_and_table_checks(self):
+        x, y = np.meshgrid(np.linspace(.485, .515, 21), np.linspace(-.02, .02, 25))
+        top = np.c_[x.ravel(), y.ravel(), np.full(x.size, .075)]
+        target = np.vstack([self.target, top])
+        scene = np.vstack([target, self.scene[~self.mask]])
+        mask = np.arange(len(scene)) < len(target)
+        policy = HorizontalGraspPolicy(scene, mask, [.2, -.3, .3], self.gripper,
+                                       restrict_horizontal=False)
+        self.assertEqual(policy.directions_in_camera(np.eye(4)), [None])
+        np.testing.assert_array_equal(policy.region_mask, mask)
+        rotation = Rotation.from_euler('y', 90, degrees=True).as_matrix()
+        result = policy.audit(self.candidate(position=(.5, 0., .075), rotation=rotation))
+        self.assertTrue(result['valid'], result)
+        self.assertNotIn('horizontal_approach', result['checks'])
+        invalid = policy.audit(self.candidate(position=(.5, .08, .075), rotation=rotation))
+        self.assertFalse(invalid['checks']['contacts_on_observed_target'])
+
+    def test_unrestricted_does_not_require_visible_side_surfaces(self):
+        x, y = np.meshgrid(np.linspace(.485, .515, 21), np.linspace(-.02, .02, 25))
+        top = np.c_[x.ravel(), y.ravel(), np.full(x.size, .075)]
+        scene = np.vstack([top, self.scene[~self.mask]])
+        mask = np.arange(len(scene)) < len(top)
+        policy = HorizontalGraspPolicy(scene, mask, [.2, -.3, .3], self.gripper,
+                                       restrict_horizontal=False)
+        self.assertEqual(policy.region_mask.sum(), len(top))
+        with self.assertRaisesRegex(ValueError, 'visible_side_surface_insufficient'):
+            HorizontalGraspPolicy(scene, mask, [.2, -.3, .3], self.gripper)
+
     def test_model_depth_limit_rejects_long_insertion(self):
         result = self.policy.audit(self.candidate(depth=.08))
         self.assertFalse(result['checks']['piper_insertion_depth'])

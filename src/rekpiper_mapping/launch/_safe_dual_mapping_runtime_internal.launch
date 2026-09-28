@@ -6,6 +6,7 @@
   <arg name="workspace_bounds_max"/>
   <arg name="esdf_slice_z_m"/>
   <arg name="mapping_cameras_config"/>
+  <arg name="use_rs3" default="true"/>
   <arg name="render_camera_name"/>
   <arg name="publish_raw_tsdf_diagnostic"/>
   <arg name="auto_rebuild_on_startup"/>
@@ -25,7 +26,8 @@
         name="curobo_robot_segmenter" output="screen" required="true">
     <param name="robot_config"
            value="$(find rekpiper_mapping)/config/piper_curobo.yml"/>
-    <rosparam param="camera_names">[rs1, rs3]</rosparam>
+    <rosparam if="$(arg use_rs3)" param="camera_names">[rs1, rs3]</rosparam>
+    <rosparam unless="$(arg use_rs3)" param="camera_names">[rs1]</rosparam>
     <param name="distance_threshold_m" value="0.015"/>
     <param name="maximum_joint_state_age_s" value="0.10"/>
   </node>
@@ -57,9 +59,12 @@
     <param name="robot_id" value="$(arg robot_id)"/>
     <param name="auto_rebuild_on_startup"
            value="$(arg auto_rebuild_on_startup)"/>
-    <rosparam subst_value="true" param="precision_extrinsics_files">
+    <rosparam if="$(arg use_rs3)" subst_value="true" param="precision_extrinsics_files">
       - $(arg rs1_extrinsics)
       - $(arg rs3_extrinsics)
+    </rosparam>
+    <rosparam unless="$(arg use_rs3)" subst_value="true" param="precision_extrinsics_files">
+      - $(arg rs1_extrinsics)
     </rosparam>
     <rosparam subst_value="true">
       workspace_bounds_min: $(arg workspace_bounds_min)

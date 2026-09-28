@@ -31,6 +31,10 @@ from rekpiper_execution.rate_monitor import distribution
 
 class PiperTrajectoryBridge:
     def __init__(self):
+        self._supervised = None
+        if rospy.get_param('~execution_profile', 'autonomous') == 'supervised':
+            from rekpiper_execution.supervised_authority import RosLease
+            self._supervised = RosLease()
         self._allow_commands = bool(rospy.get_param(
             "~allow_hardware_commands", False))
         self._map_timeout = float(rospy.get_param("~map_timeout_s", 1.0))
@@ -181,7 +185,15 @@ class PiperTrajectoryBridge:
             now = time.monotonic()
             if not self._allow_commands:
                 return False, "hardware_commands_disabled"
-            precision_accepted = bool(rospy.get_param(
+            supervised = getattr(self, '_supervised', None)
+            if supervised:
+                try:
+                    lease = supervised.check('trajectory')
+                    if expected_generation is not None and lease['preview_id'] != expected_generation:
+                        return False, 'supervised_preview_changed'
+                except (ValueError, KeyError) as exc:
+                    return False, str(exc)
+            precision_accepted = supervised is not None or bool(rospy.get_param(
                 "/rekpiper/camera/extrinsics/"
                 "precision_operation_allowed", False))
             if not precision_accepted:
@@ -203,6 +215,8 @@ class PiperTrajectoryBridge:
                 return False, "piper_arm_status_stale"
             if self._arm_error:
                 return False, "piper_{}".format(self._arm_error)
+            if supervised:
+                return True, 'supervised_feedback_and_segment_lease_valid'
             if self._map is None or now - self._map_time > self._map_timeout:
                 return False, "safe_map_stale"
             if (self._map.state != SafeMappingStatus.READY
@@ -303,6 +317,13 @@ class PiperTrajectoryBridge:
             current = self._positions.copy()
         try:
             points = goal.trajectory.points
+            if getattr(self, '_supervised', None):
+                from rekpiper_execution.supervised_session import trajectory_digest
+                lease = self._supervised.check('trajectory', trajectory_digest(
+                    goal.trajectory.joint_names, [p.positions for p in points],
+                    [p.time_from_start.to_sec() for p in points]))
+                self._speed_percent = int(lease['driver_percent'])
+                self._max_velocity = float(lease['velocity'])
             if self._hold_only:
                 if self._hold_reference is None:
                     raise TrajectoryValidationError(

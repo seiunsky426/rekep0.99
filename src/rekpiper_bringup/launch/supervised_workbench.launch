@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<launch>
+  <!-- Starting the workbench starts neither CAN nor cameras. -->
+  <arg name="config" default="$(find rekpiper_bringup)/config/supervised_workbench.yaml"/>
+  <arg name="gui" default="true"/>
+  <arg name="python" default="$(env REKPIPER_ROOT)/runtime/bin/python"/>
+  <param name="/robot_description" textfile="$(find piper_description)/urdf/piper_description.urdf"/>
+  <node pkg="robot_state_publisher" type="robot_state_publisher" name="supervised_robot_state_publisher"/>
+  <node pkg="rekpiper_execution" type="supervised_workbench_node.py" ns="/rekpiper/supervised"
+        name="session" output="screen" required="true" launch-prefix="$(arg python)">
+    <param name="config" value="$(arg config)"/>
+    <param name="system_config" value="$(find rekpiper_bringup)/config/system.yaml"/>
+    <param name="robot_file" value="$(find piper_description)/urdf/piper_description.urdf"/>
+  </node>
+  <node if="$(arg gui)" pkg="rekpiper_execution" type="supervised_panel_node.py"
+        ns="/rekpiper/supervised" name="panel" output="screen" launch-prefix="/usr/bin/python3">
+    <param name="rviz_config" value="$(find rekpiper_execution)/config/supervised_workbench.rviz"/>
+  </node>
+</launch>

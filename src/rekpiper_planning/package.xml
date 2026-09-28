@@ -12,16 +12,19 @@
   <depend>moveit_ros_planning</depend>
   <depend>cv_bridge</depend>
   <depend>geometry_msgs</depend>
+  <depend>interactive_markers</depend>
   <depend>rekpiper_msgs</depend>
   <depend>rekpiper_acceptance</depend>
   <depend>roslaunch</depend>
   <depend>rospy</depend>
   <depend>sensor_msgs</depend>
   <depend>std_msgs</depend>
+  <depend>std_srvs</depend>
   <depend>tf2_ros</depend>
   <depend>trajectory_msgs</depend>
   <depend>visualization_msgs</depend>
   <exec_depend>python3-numpy</exec_depend>
+  <exec_depend>python3-matplotlib</exec_depend>
   <exec_depend>python3-opencv</exec_depend>
   <exec_depend>python3-requests</exec_depend>
   <exec_depend>python3-scipy</exec_depend>

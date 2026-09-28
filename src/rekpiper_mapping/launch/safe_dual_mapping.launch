@@ -11,6 +11,7 @@
   <arg name="mapping_cameras_config"
        default="$(find rekpiper_mapping)/config/nvblox_cameras_dual.yaml"/>
   <arg name="render_camera_name" default="rs1"/>
+  <arg name="use_rs3" default="true"/>
   <arg name="publish_raw_tsdf_diagnostic" default="false"/>
   <!-- Shared with the acceptance mapper so the two variants cannot race. -->
   <arg name="session_lock_file" default="/tmp/rekpiper_safe_dual_mapping.lock"/>
@@ -49,6 +50,7 @@
       - "workspace_bounds_max:=$(arg workspace_bounds_max)"
       - "esdf_slice_z_m:=$(arg esdf_slice_z_m)"
       - "mapping_cameras_config:=$(arg mapping_cameras_config)"
+      - "use_rs3:=$(arg use_rs3)"
       - "render_camera_name:=$(arg render_camera_name)"
       - "publish_raw_tsdf_diagnostic:=$(arg publish_raw_tsdf_diagnostic)"
       - "auto_rebuild_on_startup:=$(arg auto_rebuild_on_startup)"

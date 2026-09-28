@@ -1,0 +1,8 @@
+string session_id
+uint8 stage
+string preview_id
+---
+bool success
+string status
+---
+string phase

@@ -1,0 +1,70 @@
+Visualization Manager:
+  Global Options:
+    Fixed Frame: base_link
+    Background Color: 32; 36; 43
+    Frame Rate: 30
+  Displays:
+    - Class: rviz/Grid
+      Name: Grid
+      Enabled: true
+      Cell Size: 0.1
+      Plane Cell Count: 20
+    - Class: rviz/RobotModel
+      Name: Real feedback robot
+      Enabled: true
+      Robot Description: /robot_description
+    - Class: rviz/PointCloud2
+      Name: RS1 + RS3 fused RGB
+      Enabled: true
+      Topic: /rekpiper/supervised/fused_points
+      Color Transformer: RGB8
+      Position Transformer: XYZ
+      Size (m): 0.003
+      Style: Points
+    - Class: rviz/PointCloud2
+      Name: Blue cube RS1 static
+      Enabled: true
+      Topic: /rekpiper/supervised/blue_review/rs1
+      Color Transformer: RGB8
+      Position Transformer: XYZ
+      Size (m): 0.005
+      Style: Points
+    - Class: rviz/PointCloud2
+      Name: Blue cube RS3 static
+      Enabled: true
+      Topic: /rekpiper/supervised/blue_review/rs3
+      Color Transformer: RGB8
+      Position Transformer: XYZ
+      Size (m): 0.005
+      Style: Points
+    - Class: rviz/InteractiveMarkers
+      Name: Drag blue masks vertically
+      Enabled: true
+      Update Topic: /rekpiper/supervised/blue_review/drag/update
+    - Class: rviz/MarkerArray
+      Name: RS3 AnyGrasp diagnostic poses
+      Enabled: true
+      Marker Topic: /rekpiper/supervised/blue_review/anygrasp_markers
+    - Class: rviz/MarkerArray
+      Name: Keypoints
+      Enabled: true
+      Marker Topic: /rekpiper/supervised/keypoint_markers
+    - Class: rviz/MarkerArray
+      Name: Live keypoint tracks
+      Enabled: true
+      Marker Topic: /rekpiper/tracking/trajectory_markers
+    - Class: rviz/MarkerArray
+      Name: Preview ghosts
+      Enabled: true
+      Marker Topic: /rekpiper/supervised/preview_markers
+    - Class: rviz/MarkerArray
+      Name: Actual orange trace
+      Enabled: true
+      Marker Topic: /rekpiper/supervised/actual_trace
+  Views:
+    Current:
+      Class: rviz/Orbit
+      Distance: 1.6
+      Focal Point: {X: 0.30, Y: 0.0, Z: 0.20}
+      Pitch: 0.7
+      Yaw: 0.8

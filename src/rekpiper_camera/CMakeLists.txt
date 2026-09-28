@@ -31,6 +31,7 @@ install(DIRECTORY launch config
 
 if(CATKIN_ENABLE_TESTING)
   catkin_add_nosetests(test/test_projection.py)
+  catkin_add_nosetests(test/test_depth_quality.py)
   catkin_add_nosetests(test/test_workspace.py)
   catkin_add_nosetests(test/test_cloud_fusion.py)
   catkin_add_nosetests(test/test_dual_extrinsics_publisher.py)

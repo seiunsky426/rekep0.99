@@ -139,8 +139,20 @@ class C_PiperRosNode():
         
         # Validate the complete signed release before constructing the SDK or
         # opening CAN. roslaunch sibling ordering is not a safety boundary.
+        self._supervised = None
+        profile = rospy.get_param('~execution_profile', 'autonomous')
+        if profile not in ('autonomous', 'supervised'):
+            raise rospy.ROSInitException('unknown execution profile')
+        if profile == 'supervised':
+            from rekpiper_execution.supervised_authority import RosLease
+            import fcntl
+            self._can_owner_lock = open('/tmp/rekpiper_{}_control.lock'.format(self.can_port), 'a')
+            fcntl.flock(self._can_owner_lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            self._calibration_lock = open('/tmp/rekpiper_calibration_{}.lock'.format(self.can_port), 'a')
+            fcntl.flock(self._calibration_lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            self._supervised = RosLease()
         try:
-            self._release = validate_release_bundle(
+            self._release = None if self._supervised else validate_release_bundle(
                 rospy.get_param("~release_bundle", ""),
                 rospy.get_param("~acceptance_public_key", ""),
                 rospy.get_param("~minimum_release_counter", ""),
@@ -151,6 +163,8 @@ class C_PiperRosNode():
         # 创建piper类并打开can接口
         self.piper = C_PiperInterface(can_name=self.can_port)
         self.piper.ConnectPort()
+        if self._supervised:
+            self._supervised_timer = rospy.Timer(rospy.Duration(.05), self._supervised_watchdog)
         # Connecting the telemetry interface must not alter controller mode.
         # MotionCtrl is selected only after explicit, acknowledged enable.
 
@@ -170,7 +184,17 @@ class C_PiperRosNode():
     def GetEnableFlag(self):
         return self.__enable_flag
 
+    def _supervised_watchdog(self, _event):
+        if not self._release_current() and self.GetEnableFlag():
+            self.handle_stop_service(None)
+
     def _release_current(self):
+        if getattr(self, '_supervised', None):
+            try:
+                self._supervised.check()
+                return True
+            except ValueError:
+                return False
         try:
             assert_release_unchanged(self._release)
             return True
@@ -574,6 +598,9 @@ class C_PiperRosNode():
     def handle_enable_service(self,req):
         rospy.loginfo(f"Received request: {req.enable_request}")
         requested_enable = bool(req.enable_request)
+        if (getattr(self, '_supervised', None) and requested_enable
+                and self._caller_id(req) != '/rekpiper/supervised/session'):
+            return EnableResponse(False)
         if requested_enable and not self._release_current():
             return EnableResponse(False)
         # Enabling selects 5% during acknowledgement. Force the next

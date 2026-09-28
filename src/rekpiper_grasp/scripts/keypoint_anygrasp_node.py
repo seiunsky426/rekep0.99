@@ -80,6 +80,8 @@ class KeypointAnyGraspNode:
         self._points_topic = rospy.get_param(
             "~points_topic", "/rekpiper/camera/rs1/points_recognition")
         self._source_camera = rospy.get_param("~source_camera", "rs1")
+        self._source_cameras = list(rospy.get_param("~source_cameras", [self._source_camera]))
+        self._restrict_horizontal = bool(rospy.get_param("~restrict_horizontal", False))
         self._horizontal_angle_deg = float(rospy.get_param(
             "~maximum_horizontal_angle_deg", 10.0))
         if not 0 < self._horizontal_angle_deg <= 30:
@@ -90,7 +92,8 @@ class KeypointAnyGraspNode:
             raise rospy.ROSInitException("Piper robot_description is unavailable")
         robot_xml = str(rospy.get_param("/robot_description"))
         self._ik = PiperURDFIKSolver.from_urdf_xml(
-            robot_xml, self._base_frame, "rekep_tcp", JOINT_NAMES)
+            robot_xml, self._base_frame, "rekep_tcp", JOINT_NAMES,
+            position_tolerance=0.002, orientation_tolerance=0.03)
         self._gripper_geometry = PiperGripperGeometry(robot_xml, self._ik)
         self._adapter = AnyGraspAdapter(
             rospy.get_param("~anygrasp_sdk_root"),
@@ -330,13 +333,15 @@ class KeypointAnyGraspNode:
                              + camera_from_base[:3, 3]).astype(np.float32)
             geometry_policy = HorizontalGraspPolicy(
                 points_base, mask, base_from_camera[:3, 3], self._gripper_geometry,
-                maximum_horizontal_angle_deg=self._horizontal_angle_deg)
+                maximum_horizontal_angle_deg=self._horizontal_angle_deg,
+                restrict_horizontal=self._restrict_horizontal)
             raw = []
             for direction_camera in geometry_policy.directions_in_camera(base_from_camera):
                 raw.extend(self._adapter.infer(
                     points_camera, geometry_policy.region_mask, self._source_camera,
                     approach_steering=direction_camera,
-                    approach_thresh_rad=np.deg2rad(self._horizontal_angle_deg),
+                    approach_thresh_rad=(np.deg2rad(self._horizontal_angle_deg)
+                                         if self._restrict_horizontal else np.pi),
                     max_candidates=self._maximum_candidates, dense_grasp=True))
             with self._lock:
                 grid = deepcopy(self._sdf)
@@ -353,10 +358,11 @@ class KeypointAnyGraspNode:
                     interaction_region_id="rigid_group_{}".format(group),
                     part_name="GPT4o_selected_K{}".format(keypoint_index),
                     physical_opening_m=self._gripper_geometry.maximum_opening_m)
+                candidate.source_cameras = list(self._source_cameras)
                 geometry_audit = geometry_policy.audit(candidate)
                 if not geometry_audit['valid']:
                     candidate.rejection_reasons.extend(
-                        'horizontal_geometry:'+reason for reason in geometry_audit['rejection_reasons'])
+                        'grasp_geometry:'+reason for reason in geometry_audit['rejection_reasons'])
                     audited.append(candidate)
                     continue
                 half = 0.5 * candidate.predicted_width_m
@@ -369,9 +375,9 @@ class KeypointAnyGraspNode:
                 candidate.part_membership_ok = np.linalg.norm(candidate.tcp_position-anchor) <= 0.10
                 try:
                     pre = self._ik.solve(candidate.pregrasp_pose,
-                                         initial_joint_pos=joints, max_iterations=100)
+                                         initial_joint_pos=joints, max_iterations=200)
                     final = self._ik.solve(candidate.grasp_pose,
-                                           initial_joint_pos=pre.cspace_position, max_iterations=100)
+                                           initial_joint_pos=pre.cspace_position, max_iterations=200)
                     candidate.ik_ok = bool(pre.success and final.success)
                     if candidate.ik_ok:
                         poses = []

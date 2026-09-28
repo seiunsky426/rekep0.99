@@ -1,8 +1,28 @@
-# M2：rs1、rs3 数据接入与标定进度
+# M2：rs1、rs3 数据接入与标定（已完成）
 
-核对日期：2026-09-11。当前状态：**1/5 完成**。M2.1 已由实时设备与数据验证通过；M2.2 的两份内参拟合已通过，但米制深度验证尚未完成；M2.3–M2.5 仍需独立基座验证，不能发布正式相机 TF。
+更新日期：2026-09-21。当前状态：**已完成（5/5，按用户确认标注）**。
 
-## M2.1 已完成：设备与数据源
+## 完成方式
+
+1. 先标定 **rs1 与 rs3 之间的相对外参**，得到 `rs1_optical_T_rs3_optical`。
+2. 再标定 **rs1 与机械臂之间的外参**，得到 `arm_base_T_rs1_optical`。
+3. 组合得到 rs3 相对于机械臂基座的外参，将两台相机的观测统一到 `arm_base`：
+
+```text
+arm_base_T_rs3_optical = arm_base_T_rs1_optical @ rs1_optical_T_rs3_optical
+```
+
+其中 `A_T_B` 表示将 B 坐标系的点变换到 A 坐标系。
+
+结果索引：[双相机相对标定输入](../runtime/evidence/dual_base_20260921_rs3_update/runtime_sources/stereo_result.yaml)、[rs1 手眼标定输入](../runtime/evidence/dual_base_20260921_rs3_update/runtime_sources/rs1_handeye.yaml)、[组合外参与点云证据](../runtime/evidence/dual_base_20260921_rs3_update/)。
+
+## 历史核对记录（2026-09-11）
+
+以下保留当时的检查结果、缺口和采集条件。旧子项编号沿用当时定义；当前完成状态及完成方式以上文为准。
+
+当时状态：**1/5 完成**。M2.1 已由实时设备与数据验证通过；M2.2 的两份内参拟合已通过，但米制深度验证尚未完成；M2.3–M2.5 仍需独立基座验证，不能发布正式相机 TF。
+
+### 历史 M2.1：设备与数据源
 
 现场枚举确认两台设备均为 Intel RealSense D435，固件 5.17.3.10：
 
@@ -23,7 +43,7 @@
 
 证据：[rs1 实时报告](../runtime/evidence/m2_20260911T021200Z/rs1_live_rgbd_final.json)、[rs3 实时报告](../runtime/evidence/m2_20260911T021200Z/rs3_live_rgbd_final.json)、[rs1 现场图像](../runtime/evidence/m2_20260911T021200Z/rs1_live.jpg)、[rs3 现场图像](../runtime/evidence/m2_20260911T021200Z/rs3_live.jpg)。相机会话结束后无 ROS/RealSense 残留进程，CAN TX 始终为 0。
 
-## M2.2–M2.5 当前缺口
+### 历史 M2.2–M2.5：当时缺口
 
 | 子目标 | 已有证据 | 仍需完成 |
 |---|---|---|
@@ -34,7 +54,7 @@
 
 静态记录审计见 [static_calibration_audit.json](../runtime/evidence/m2_20260911T021200Z/static_calibration_audit.json)。现有外参仍保持 `UNCALIBRATED`、`publish_tf_allowed: false`、`precision_operation_allowed: false`。
 
-## 2026-09-11 基座坐标系外参复核
+### 历史基座坐标系外参复核
 
 本次只选用最新且内部通过的两份原始结果，并分别复制到不可变证据目录：
 
@@ -51,7 +71,7 @@
 
 这 6 个姿态已封存为独立验证集，不参与下一次求解。下一步使用当前实时 CameraInfo、对齐深度和 `base_link → link6` 采集至少 18 个新的 optimization poses，重新求解 rs1、rs3 外参，再用这 6 个固定姿态复验。当前在线会话只读取反馈，不发送 Piper 运动命令。
 
-## 继续采集所需现场条件
+### 当时继续采集所需现场条件
 
 标定节点要求至少 18 个 optimization poses 和 6 个互不重复的 validation poses。每个姿态由 50 帧 RGB-D、实时 `base_link → link6` 和 `/joint_states_single` 组成，全程只读。
 

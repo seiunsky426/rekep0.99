@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 import json
 from pathlib import Path
 import time
@@ -17,8 +17,10 @@ from .official_program import (
 from .upstream import load_official_core
 from .solver_deadline import bounded_solver_call
 from .continuous_ik import densify_joint_path
+from .piper_path_solver import make_piper_path_solver, sample_spline_path
 from .paper_real_solver import (
     PaperRealPathSolver, PaperRealSubgoalSolver, PaperRealWeights)
+from .path_solver_trace import PathSolverTrace, default_trace_directory
 
 
 class RealtimePlanningError(RuntimeError):
@@ -52,6 +54,8 @@ class RealtimePlanningRequest:
     joint_fallback_fn: Optional[Callable] = None
     solver_call_timeouts: Optional[Tuple[float, float]] = None
     grasp_target_pose: Optional[np.ndarray] = None
+    target_orientation: Optional[np.ndarray] = None
+    fixed_target_pose: Optional[np.ndarray] = None
 
 
 @dataclass(frozen=True)
@@ -135,7 +139,8 @@ class PersistentReKepPlanner:
                  solver_profile: str = "official_exact",
                  paper_real_weights: Optional[dict] = None,
                  table_height_m: Optional[float] = None,
-                 robot_collision_points_fn=None):
+                 robot_collision_points_fn=None,
+                 path_trace_directory=None):
         self.subgoal_config = dict(subgoal_config)
         self.path_config = dict(path_config)
         self.ik_solver = ik_solver
@@ -152,11 +157,14 @@ class PersistentReKepPlanner:
         self.official_interpolate_rotation_step_rad = float(
             official_interpolate_rotation_step_rad)
         self.solver_profile = str(solver_profile)
-        if self.solver_profile not in ("official_exact", "paper_real"):
-            raise ValueError("solver_profile must be official_exact or paper_real")
+        if self.solver_profile not in ("official_exact", "paper_real", "piper_continuous"):
+            raise ValueError("solver_profile must be official_exact, paper_real or piper_continuous")
         self.paper_real_weights = None
         self.table_height_m = table_height_m
         self.robot_collision_points_fn = robot_collision_points_fn
+        self.path_trace_directory = (default_trace_directory() if path_trace_directory is None
+                                     else str(path_trace_directory))
+        self._path_trace = None
         if self.solver_profile == "paper_real":
             self.paper_real_weights = PaperRealWeights.from_mapping(
                 paper_real_weights or {})
@@ -199,6 +207,13 @@ class PersistentReKepPlanner:
                         self.table_height_m,
                         self.robot_collision_points_fn),
                 )
+            elif self.solver_profile == "piper_continuous":
+                self._solvers[stage] = (
+                    _without_warmup(self.modules.subgoal_solver.SubgoalSolver,
+                                    self.subgoal_config, self.ik_solver, reset),
+                    make_piper_path_solver(
+                        self.path_config, self.ik_solver, reset, self.modules,
+                        self._sample_spline_path, self.maximum_joint_jump_rad))
             else:
                 self._solvers[stage] = (
                     _without_warmup(self.modules.subgoal_solver.SubgoalSolver,
@@ -265,6 +280,11 @@ class PersistentReKepPlanner:
             dense.extend(segment if index == 0 else segment[1:])
         return np.asarray(dense, dtype=float)
 
+    def _sample_spline_path(self, controls):
+        return sample_spline_path(self.modules, controls,
+            self.official_interpolate_position_step_m, self.official_interpolate_rotation_step_rad,
+            self.maximum_position_step_m, self.maximum_rotation_step_rad)
+
     def _official_spline_path(self, controls: np.ndarray) -> np.ndarray:
         """Apply the byte-exact upstream path post-processing semantics.
 
@@ -273,12 +293,18 @@ class PersistentReKepPlanner:
         through every optimized control point.  Piper adds a denser sampling
         pass afterwards solely for IK and collision auditing.
         """
-        count = self.modules.utils.get_linear_interpolation_steps(
-            controls[0], controls[-1],
-            self.official_interpolate_position_step_m,
-            self.official_interpolate_rotation_step_rad)
-        official = self.modules.utils.spline_interpolate_poses(controls, count)
-        return self._safety_resample(np.asarray(official, dtype=float))
+        official, dense = self._sample_spline_path(controls)
+        trace = getattr(self, '_path_trace', None)
+        if trace is not None:
+            cost_samples, _ = self.modules.utils.get_samples_jitted(
+                self.modules.transform_utils.convert_pose_quat2mat(controls), controls,
+                self.path_config['opt_interpolate_pos_step_size'],
+                self.path_config['opt_interpolate_rot_step_size'])
+            if self.solver_profile == 'piper_continuous':
+                cost_samples = dense
+            trace.record_path(control_poses=controls, spline_poses=official,
+                              dense_poses=dense, objective_sample_poses=cost_samples)
+        return dense
 
     def _transformed(self, pose, current_ee, full_keypoints, movable):
         current = self.modules.transform_utils.pose2mat(
@@ -334,6 +360,25 @@ class PersistentReKepPlanner:
         return densify_joint_path(result)
 
     def solve(self, request: RealtimePlanningRequest) -> RealtimePlanningResult:
+        self._path_trace = None
+        try:
+            result = self._solve(request)
+        except Exception as exc:
+            if self._path_trace is not None:
+                self._path_trace.finish('planner_failed', type(exc).__name__ + ': ' + str(exc))
+            raise
+        else:
+            if self._path_trace is not None:
+                self._path_trace.record_path(joint_path=result.joint_path,
+                                            fk_poses=result.cartesian_path,
+                                            diagnostics=result.diagnostics)
+                result.diagnostics['path_trace_directory'] = str(self._path_trace.directory)
+                self._path_trace.finish('planner_returned')
+            return result
+        finally:
+            self._path_trace = None
+
+    def _solve(self, request: RealtimePlanningRequest) -> RealtimePlanningResult:
         started = time.monotonic()
         ee, joints, keypoints, groups, sdf, collision = self._validate(request)
         self._bind(request.generation)
@@ -359,7 +404,16 @@ class PersistentReKepPlanner:
         full_keypoints = np.vstack([ee[:3], keypoints])
         subgoal_solver, path_solver = self._solver_pair(request.stage, joints)
         budgets = request.solver_call_timeouts or (None,None)
-        if request.is_grasp_stage:
+        if request.fixed_target_pose is not None:
+            if request.is_grasp_stage or request.grasp_target_pose is not None:
+                raise RealtimePlanningError('fixed target conflicts with grasp target')
+            semantic_target = np.asarray(request.fixed_target_pose, dtype=float)
+            if (semantic_target.shape != (7,) or not np.isfinite(semantic_target).all()
+                    or not np.isclose(np.linalg.norm(semantic_target[3:]), 1., atol=1e-5)):
+                raise RealtimePlanningError('invalid fixed target pose')
+            semantic_target = semantic_target.copy()
+            subgoal_global = False
+        elif request.is_grasp_stage:
             semantic_target = np.asarray(request.grasp_target_pose, dtype=float).copy()
             subgoal_global = False
         else:
@@ -368,6 +422,12 @@ class PersistentReKepPlanner:
                 ee, full_keypoints, movable, subgoals, paths, sdf, collision,
                 False, np.r_[joints[:6], 0.0], from_scratch=subgoal_global)
             semantic_target = np.asarray(semantic_target, dtype=float)
+        if request.target_orientation is not None:
+            orientation = np.asarray(request.target_orientation, dtype=float)
+            if (orientation.shape != (4,) or not np.isfinite(orientation).all()
+                    or not np.isclose(np.linalg.norm(orientation), 1., atol=1e-6)):
+                raise RealtimePlanningError('invalid_fixed_target_orientation')
+            semantic_target[3:] = orientation
         target = semantic_target.copy()
 
         previous = self._last_target.get(request.stage)
@@ -376,22 +436,48 @@ class PersistentReKepPlanner:
             raise RealtimePlanningError("warm-start target changed discontinuously")
         path_global = path_solver.last_opt_result is None
         path_error = None
+        path_call = path_solver.solve
+        if getattr(self, 'path_trace_directory', ''):
+            self._path_trace = PathSolverTrace(self.path_trace_directory, dict(
+                stage=request.stage, generation=asdict(request.generation),
+                solver_profile=self.solver_profile, from_scratch=path_global,
+                base_frame=getattr(self.ik_solver, 'base_frame', 'base_link'),
+                tip_frame=getattr(self.ik_solver, 'tip_frame', 'rekep_tcp'),
+                joint_names=getattr(self.ik_solver, 'joint_names', []),
+                initial_joint_positions=joints, start_pose=ee, target_pose=target,
+                solver_config=self.path_config,
+                paper_real_weights=(asdict(self.paper_real_weights)
+                                    if self.paper_real_weights is not None else None),
+                table_height_m=self.table_height_m,
+                collision_threshold_m=getattr(path_solver, 'collision_threshold_m', .20),
+                endpoint_exemption_radius_m=getattr(path_solver, 'endpoint_exemption_radius_m', None),
+                keypoints=full_keypoints, movable_mask=movable,
+                path_constraint_count=len(paths), sdf_shape=sdf.shape,
+                reset_reg_in_total=self.solver_profile == 'paper_real',
+                pose_convention='x y z qx qy qz qw; metres; radians'))
+            path_call = lambda *a, **kw: self._path_trace.solve(path_solver, *a, **kw)
         try:
-            controls_tail, _path_debug = bounded_solver_call(path_solver.solve,budgets[1],
+            controls_tail, _path_debug = bounded_solver_call(path_call,budgets[1],
                 ee, target, full_keypoints, movable, paths, sdf, collision,
                 np.r_[joints[:6], 0.0], from_scratch=path_global)
+            if self._path_trace is not None:
+                self._path_trace.record_path(control_poses=np.vstack([ee, controls_tail]),
+                                            solver_debug=_path_debug)
             dense = self._official_spline_path(np.vstack([ee, controls_tail]))
         except (TimeoutError, RuntimeError) as exc:
             if request.joint_fallback_fn is None:
                 raise
             path_error = str(exc)
+            if self._path_trace is not None:
+                self._path_trace.event('path_solver_failed', error=path_error)
             # This is not an accepted Cartesian shortcut: force audited RRT.
             dense = np.asarray([ee,target])
         subgoal_values, path_values = self._check_constraints(
             ee, full_keypoints, movable, semantic_target, dense, subgoals, paths)
         diagnostics = {'path_backend': 'PathSolver', 'fallback_attempts': [],
-                       'subgoal_source': 'bound_anygrasp_tcp' if request.is_grasp_stage
-                       else 'SubgoalSolver'}
+                       'subgoal_source': ('fixed_target_pose' if request.fixed_target_pose is not None
+                                          else 'bound_anygrasp_tcp' if request.is_grasp_stage
+                                          else 'SubgoalSolver')}
         tolerance = float(self.path_config.get('constraint_tolerance', .0001))
         def state_valid(q):
             matrix = self.ik_solver.forward(q)

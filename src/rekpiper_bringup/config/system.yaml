@@ -22,24 +22,24 @@ robot_capabilities:
 subgoal_solver:
   bounds_min: [-0.20, -0.60, -0.07]
   bounds_max: [0.80, 0.60, 0.80]
-  # Bounded M8 cold start; execution also enforces a 30 s subgoal deadline.
-  sampling_maxfun: 200
+  # Match the pinned official ReKep optimization budgets.
+  sampling_maxfun: 5000
   max_collision_points: 30
   constraint_tolerance: 0.0001
-  minimizer_options: {maxiter: 30}
+  minimizer_options: {maxiter: 200}
 
 path_solver:
   bounds_min: [-0.20, -0.60, -0.07]
   bounds_max: [0.80, 0.60, 0.80]
-  # Reserve time for continuous IK / OMPL inside the 60 s worker deadline.
-  sampling_maxfun: 40
+  # Match the pinned official ReKep optimization budgets.
+  sampling_maxfun: 5000
   max_collision_points: 30
   constraint_tolerance: 0.0001
   opt_pos_step_size: 0.20
   opt_rot_step_size: 0.7853981633974483
   opt_interpolate_pos_step_size: 0.02
   opt_interpolate_rot_step_size: 0.10
-  minimizer_options: {maxiter: 30}
+  minimizer_options: {maxiter: 200}
 
 rekpiper:
   execution:

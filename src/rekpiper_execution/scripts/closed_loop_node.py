@@ -266,7 +266,8 @@ class ClosedLoopNode:
             solver_profile=self._solver_profile,
             paper_real_weights=paper_weights,
             table_height_m=table_height,
-            robot_collision_points_fn=self._paper_real_robot_points)
+            robot_collision_points_fn=self._paper_real_robot_points,
+            path_trace_directory=rospy.get_param("~path_trace_directory", None))
 
         self._tf = tf2_ros.Buffer(cache_time=rospy.Duration(5.0))
         self._tf_listener = tf2_ros.TransformListener(self._tf)
@@ -324,7 +325,7 @@ class ClosedLoopNode:
                          self._registry_cb, queue_size=1)
         rospy.Subscriber('/rekpiper/objects/tracked_clouds',TrackedObjectCloudArray,
                          self._object_clouds_cb,queue_size=1)
-        rospy.Subscriber('/rekpiper/camera/fused/points_base',PointCloud2,
+        rospy.Subscriber('/rekpiper/camera/rs1/points_recognition',PointCloud2,
                          self._scene_cloud_cb,queue_size=1)
         rospy.Subscriber("/rekpiper/mapping/safe_status", SafeMappingStatus,
                          self._map_status_cb, queue_size=1)
